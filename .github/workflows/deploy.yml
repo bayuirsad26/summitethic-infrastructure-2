@@ -1,0 +1,291 @@
+---
+name: SummitEthic Infrastructure Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy to"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      confirm_ethical_check:
+        description: "Confirm ethical review has been completed"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  ethical_check:
+    name: Ethical Deployment Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Ethical Review Confirmation
+        if: ${{ !inputs.confirm_ethical_check }}
+        run: |
+          echo "::error::Ethical review confirmation is required before deployment"
+          exit 1
+
+      - name: Document Ethical Check
+        run: |
+          echo "Ethical deployment check passed at $(date)"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Triggered by: ${{ github.actor }}"
+
+  security_scan:
+    name: Security Scanning
+    needs: ethical_check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install safety bandit
+
+      - name: Scan for vulnerable dependencies
+        run: safety check -r requirements.txt
+
+      - name: Scan code for security issues
+        run: bandit -r ansible/ -f json -o security-report.json
+
+      - name: Check for secrets
+        uses: gitleaks/gitleaks-action@v2
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-reports
+          path: |
+            security-report.json
+            gitleaks-report.json
+
+  infrastructure_validation:
+    name: Infrastructure Validation
+    needs: security_scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ansible Lint
+        run: ansible-lint ansible/
+
+      - name: Terraform Validate
+        run: |
+          cd terraform/environments/${{ inputs.environment }}
+          terraform init -backend=false
+          terraform validate
+
+  deploy:
+    name: Deploy Infrastructure
+    needs: infrastructure_validation
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure SSH key
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Create Vault password file
+        run: echo "${{ secrets.VAULT_PASSWORD }}" > .vault_pass
+
+      - name: Display deployment plan
+        run: |
+          ansible-playbook -i ansible/inventories/${{ inputs.environment }}/inventory.yml ansible/playbooks/site.yml --check --diff
+
+      - name: Confirm deployment
+        id: confirm
+        run: |
+          echo "Do you want to proceed with the deployment? (Press cancel to abort)"
+          sleep 10
+          echo "deployment_confirmed=true" >> $GITHUB_OUTPUT
+
+      - name: Deploy infrastructure
+        if: steps.confirm.outputs.deployment_confirmed == 'true'
+        run: |
+          ansible-playbook -i ansible/inventories/${{ inputs.environment }}/inventory.yml ansible/playbooks/site.yml
+
+      - name: Run post-deployment tests
+        if: steps.confirm.outputs.deployment_confirmed == 'true'
+        run: |
+          ansible-playbook -i ansible/inventories/${{ inputs.environment }}/inventory.yml ansible/playbooks/test.yml
+
+      - name: Cleanup sensitive files
+        if: always()
+        run: rm -f .vault_pass
+
+  notify:
+    name: Notify Deployment Status
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Notify success
+        if: ${{ needs.deploy.result == 'success' }}
+        run: |
+          echo "Deployment to ${{ inputs.environment }} completed successfully"
+          # Add notification logic here (email, Slack, etc.)
+
+      - name: Notify failure
+        if: ${{ needs.deploy.result != 'success' }}
+        run: |
+          echo "Deployment to ${{ inputs.environment }} failed"
+          # Add notification logic here (email, Slack, etc.)
+
+  post-deploy-verification:
+    name: Post-Deployment Verification
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: ${{ needs.deploy.result == 'success' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install requests pytest
+
+      - name: Configure SSH key
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Run connectivity tests
+        run: |
+          ansible-playbook -i ansible/inventories/${{ inputs.environment }}/inventory.yml ansible/playbooks/verify.yml
+
+      - name: Run API health checks
+        run: |
+          python ./scripts/verify_health.py --environment ${{ inputs.environment }}
+
+      - name: Run ethical resource check
+        run: |
+          ansible-playbook -i ansible/inventories/${{ inputs.environment }}/inventory.yml ansible/playbooks/ethical_resource_check.yml
+
+      - name: Generate verification report
+        run: |
+          mkdir -p verification-reports
+          echo "# Deployment Verification Report" > verification-reports/report.md
+          echo "Environment: ${{ inputs.environment }}" >> verification-reports/report.md
+          echo "Date: $(date)" >> verification-reports/report.md
+          echo "Deployed by: ${{ github.actor }}" >> verification-reports/report.md
+          echo "Commit: ${{ github.sha }}" >> verification-reports/report.md
+          echo "\n## Test Results" >> verification-reports/report.md
+          echo "All tests completed successfully!" >> verification-reports/report.md
+
+      - name: Upload verification report
+        uses: actions/upload-artifact@v3
+        with:
+          name: verification-report
+          path: verification-reports/report.md
+
+  record-deployment:
+    name: Record Deployment
+    needs: [deploy, post-deploy-verification]
+    if: ${{ always() && needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record deployment details
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.DEPLOYMENT_API_TOKEN }}" \
+            -d '{
+              "environment": "${{ inputs.environment }}",
+              "status": "success",
+              "deployer": "${{ github.actor }}",
+              "commitSha": "${{ github.sha }}",
+              "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
+            }' \
+            https://api.summitethic.com/deployments
+
+      - name: Update documentation
+        if: ${{ inputs.environment == 'production' }}
+        run: |
+          echo "Updating documentation for production deployment"
+          # Add logic to update documentation or generate deployment notes
+
+  post-deployment-cleanup:
+    name: Post-Deployment Cleanup
+    needs: [deploy, post-deploy-verification, record-deployment]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clean temporary files
+        run: |
+          echo "Cleaning up temporary deployment files"
+
+      - name: Send notification
+        if: ${{ always() }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const deployStatus = '${{ needs.deploy.result }}' === 'success' ? '✅ Successful' : '❌ Failed';
+            const verifyStatus = '${{ needs.post-deploy-verification.result }}' === 'success' ? '✅ Passed' : '❌ Failed';
+
+            const message = `
+            # Deployment to ${{ inputs.environment }} - ${deployStatus}
+
+            **Deployment Details**
+            - Environment: ${{ inputs.environment }}
+            - Triggered by: ${{ github.actor }}
+            - Commit: ${{ github.sha }}
+
+            **Verification**: ${verifyStatus}
+
+            ${deployStatus === '✅ Successful' ? 'Deployment completed successfully!' : 'Deployment encountered issues.'}
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });

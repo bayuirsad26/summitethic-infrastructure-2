@@ -1,0 +1,81 @@
+name: Terraform Validate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-validate.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-validate.yml"
+
+jobs:
+  validate:
+    name: Validate Terraform Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.2.9
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive terraform/
+        continue-on-error: true
+
+      - name: Validate Development Environment
+        run: |
+          cd terraform/environments/development
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate Staging Environment
+        run: |
+          cd terraform/environments/staging
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate Production Environment
+        run: |
+          cd terraform/environments/production
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate Modules
+        run: |
+          for module in terraform/modules/*; do
+            if [ -d "$module" ]; then
+              echo "Validating module: $(basename $module)"
+              cd $module
+              terraform init -backend=false
+              terraform validate
+              cd - > /dev/null
+            fi
+          done
+
+      - name: TFSec Security Scan
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          tfsec_args: terraform/ --exclude-downloaded-modules
+
+      - name: Generate Terraform Documentation
+        uses: terraform-docs/gh-actions@v1
+        with:
+          working-dir: terraform/
+          output-file: README.md
+          output-method: inject
+          git-push: "false"
+
+      - name: Check for Ethical Tags
+        run: |
+          echo "Checking for ethical considerations in Terraform code..."
+          grep -r "org.summitethic" terraform/ || echo "Warning: No ethical tags found in code"
+          grep -r "ethical" terraform/ || echo "Warning: No explicit ethical considerations found"
