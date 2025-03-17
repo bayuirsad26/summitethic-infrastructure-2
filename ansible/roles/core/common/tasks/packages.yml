@@ -1,0 +1,28 @@
+---
+# Installs and configures common packages across all servers
+
+- name: Install common packages
+  package:
+    name: "{{ common_packages }}"
+    state: present
+  register: package_install
+  until: package_install is success
+  retries: 3
+  delay: 5
+
+- name: Remove unnecessary packages
+  package:
+    name: "{{ common_packages_to_remove }}"
+    state: absent
+  when: common_packages_to_remove is defined and common_packages_to_remove|length > 0
+
+- name: Ensure all packages are updated
+  package:
+    name: "*"
+    state: latest
+  when: common_update_all | bool
+  tags: [update]
+  register: package_update
+  until: package_update is success
+  retries: 3
+  delay: 5

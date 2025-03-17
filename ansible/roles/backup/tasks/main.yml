@@ -1,0 +1,99 @@
+---
+# Backup system implementation for SummitEthic
+# Implements comprehensive and secure backup strategy
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Install backup dependencies
+  package:
+    name: "{{ backup_packages }}"
+    state: present
+  register: backup_pkg_install
+  until: backup_pkg_install is success
+  retries: 3
+  delay: 5
+  tags: [install]
+
+- name: Create backup directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0750
+  with_items:
+    - "{{ backup_base_dir }}"
+    - "{{ backup_base_dir }}/system"
+    - "{{ backup_base_dir }}/databases"
+    - "{{ backup_base_dir }}/docker"
+    - "{{ backup_base_dir }}/configs"
+    - "{{ backup_base_dir }}/logs"
+  tags: [directories]
+
+- name: Configure system backup
+  import_tasks: system_backup.yml
+  when: backup_system_enabled | bool
+  tags: [system]
+
+- name: Configure database backup
+  import_tasks: database_backup.yml
+  when: backup_database_enabled | bool
+  tags: [database]
+
+- name: Configure Docker volume backup
+  import_tasks: docker_backup.yml
+  when: backup_docker_enabled | bool and "'container_hosts' in group_names"
+  tags: [docker]
+
+- name: Configure remote backup storage
+  include_tasks: "remote/{{ backup_remote_type }}.yml"
+  when: backup_remote_enabled | bool
+  tags: [remote]
+
+- name: Create backup monitoring script
+  template:
+    src: backup_monitor.sh.j2
+    dest: "{{ backup_scripts_dir }}/backup_monitor.sh"
+    owner: root
+    group: root
+    mode: 0750
+  tags: [monitoring]
+
+- name: Configure backup monitoring cron job
+  cron:
+    name: "Backup monitoring"
+    hour: "*/6"
+    minute: "15"
+    job: "{{ backup_scripts_dir }}/backup_monitor.sh > {{ backup_base_dir }}/logs/monitor.log 2>&1"
+  tags: [monitoring, cron]
+
+- name: Create backup rotation script
+  template:
+    src: cleanup.sh.j2
+    dest: "{{ backup_scripts_dir }}/cleanup.sh"
+    owner: root
+    group: root
+    mode: 0750
+  tags: [rotation]
+
+- name: Configure backup rotation cron job
+  cron:
+    name: "Backup rotation"
+    hour: "3"
+    minute: "0"
+    job: "{{ backup_scripts_dir }}/cleanup.sh > {{ backup_base_dir }}/logs/cleanup.log 2>&1"
+  tags: [rotation, cron]
+
+- name: Document backup policy
+  template:
+    src: backup-policy.md.j2
+    dest: "{{ backup_base_dir }}/BACKUP_POLICY.md"
+    owner: root
+    group: root
+    mode: 0644
+  tags: [documentation]

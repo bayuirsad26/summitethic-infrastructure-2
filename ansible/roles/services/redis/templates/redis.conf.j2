@@ -1,0 +1,121 @@
+# {{ ansible_managed }}
+# SummitEthic Redis Configuration - Security Level: {{ security_level }}
+
+# Network
+bind {{ redis_bind_address | default('127.0.0.1') }}
+port {{ redis_port | default(6379) }}
+protected-mode yes
+tcp-backlog {{ redis_tcp_backlog | default(511) }}
+timeout {{ redis_timeout | default(0) }}
+tcp-keepalive {{ redis_tcp_keepalive | default(300) }}
+
+# General
+daemonize no
+supervised no
+pidfile /var/run/redis/redis-server.pid
+loglevel {{ redis_log_level | default('notice') }}
+logfile ""
+syslog-enabled {{ 'yes' if redis_syslog_enabled | default(false) else 'no' }}
+syslog-ident {{ redis_syslog_ident | default('redis') }}
+syslog-facility {{ redis_syslog_facility | default('local0') }}
+databases {{ redis_databases | default(16) }}
+always-show-logo {{ 'yes' if redis_always_show_logo | default(false) else 'no' }}
+
+# Memory Management
+maxmemory {{ redis_maxmemory | default('256mb') }}
+maxmemory-policy {{ redis_maxmemory_policy | default('allkeys-lru') }}
+maxmemory-samples {{ redis_maxmemory_samples | default(5) }}
+
+# Lazy freeing
+lazyfree-lazy-eviction {{ 'yes' if redis_lazyfree_lazy_eviction | default(true) else 'no' }}
+lazyfree-lazy-expire {{ 'yes' if redis_lazyfree_lazy_expire | default(true) else 'no' }}
+lazyfree-lazy-server-del {{ 'yes' if redis_lazyfree_lazy_server_del | default(true) else 'no' }}
+replica-lazy-flush {{ 'yes' if redis_replica_lazy_flush | default(true) else 'no' }}
+
+# Append Only Mode
+appendonly {{ 'yes' if redis_appendonly | default(true) else 'no' }}
+appendfilename "appendonly.aof"
+appendfsync {{ redis_appendfsync | default('everysec') }}
+no-appendfsync-on-rewrite {{ 'yes' if redis_no_appendfsync_on_rewrite | default(false) else 'no' }}
+auto-aof-rewrite-percentage {{ redis_auto_aof_rewrite_percentage | default(100) }}
+auto-aof-rewrite-min-size {{ redis_auto_aof_rewrite_min_size | default('64mb') }}
+aof-load-truncated {{ 'yes' if redis_aof_load_truncated | default(true) else 'no' }}
+aof-use-rdb-preamble {{ 'yes' if redis_aof_use_rdb_preamble | default(true) else 'no' }}
+
+# RDB Persistence
+save 900 1
+save 300 10
+save 60 10000
+stop-writes-on-bgsave-error {{ 'yes' if redis_stop_writes_on_bgsave_error | default(true) else 'no' }}
+rdbcompression {{ 'yes' if redis_rdbcompression | default(true) else 'no' }}
+rdbchecksum {{ 'yes' if redis_rdbchecksum | default(true) else 'no' }}
+dbfilename dump.rdb
+rdb-del-sync-files {{ 'yes' if redis_rdb_del_sync_files | default(true) else 'no' }}
+
+# Security
+{% if redis_password is defined and redis_password %}
+requirepass {{ redis_password }}
+{% endif %}
+{% if redis_acl_file is defined and redis_acl_file %}
+aclfile {{ redis_acl_file }}
+{% endif %}
+
+# Clients
+maxclients {{ redis_maxclients | default(10000) }}
+
+# Memory Management Options
+active-expire-effort {{ redis_active_expire_effort | default(1) }}
+{% if redis_active_defrag_enabled is defined %}
+activedefrag {{ 'yes' if redis_active_defrag_enabled else 'no' }}
+active-defrag-ignore-bytes {{ redis_active_defrag_ignore_bytes | default('100mb') }}
+active-defrag-threshold-lower {{ redis_active_defrag_threshold_lower | default(10) }}
+active-defrag-threshold-upper {{ redis_active_defrag_threshold_upper | default(100) }}
+active-defrag-cycle-min {{ redis_active_defrag_cycle_min | default(5) }}
+active-defrag-cycle-max {{ redis_active_defrag_cycle_max | default(75) }}
+active-defrag-max-scan-fields {{ redis_active_defrag_max_scan_fields | default(1000) }}
+{% endif %}
+
+# Slow Log
+slowlog-log-slower-than {{ redis_slowlog_log_slower_than | default(10000) }}
+slowlog-max-len {{ redis_slowlog_max_len | default(128) }}
+
+# Latency Monitor
+latency-monitor-threshold {{ redis_latency_monitor_threshold | default(0) }}
+
+# Event Notification
+notify-keyspace-events "{{ redis_notify_keyspace_events | default('') }}"
+
+# Advanced Config
+hash-max-ziplist-entries 512
+hash-max-ziplist-value 64
+list-max-ziplist-size -2
+list-compress-depth 0
+set-max-intset-entries 512
+zset-max-ziplist-entries 128
+zset-max-ziplist-value 64
+hll-sparse-max-bytes 3000
+stream-node-max-bytes 4096
+stream-node-max-entries 100
+activerehashing yes
+hz {{ redis_hz | default(10) }}
+dynamic-hz {{ 'yes' if redis_dynamic_hz | default(true) else 'no' }}
+aof-rewrite-incremental-fsync yes
+rdb-save-incremental-fsync yes
+jemalloc-bg-thread {{ 'yes' if redis_jemalloc_bg_thread | default(true) else 'no' }}
+
+# TLS/SSL (if enabled)
+{% if redis_tls_enabled | default(false) %}
+tls-port {{ redis_tls_port | default(6380) }}
+tls-cert-file {{ redis_tls_cert_file | default('/path/to/cert.crt') }}
+tls-key-file {{ redis_tls_key_file | default('/path/to/cert.key') }}
+tls-ca-cert-file {{ redis_tls_ca_cert_file | default('/path/to/ca.crt') }}
+tls-auth-clients {{ 'yes' if redis_tls_auth_clients | default(true) else 'no' }}
+tls-prefer-server-ciphers {{ 'yes' if redis_tls_prefer_server_ciphers | default(true) else 'no' }}
+{% endif %}
+
+# Ethical resource management configuration
+# This section documents the ethical considerations for resource usage
+
+# Memory efficiency - limiting memory to prevent resource starvation
+# Data privacy - ensuring cached data is appropriately protected
+# Resource fairness - preventing any client from monopolizing the cache

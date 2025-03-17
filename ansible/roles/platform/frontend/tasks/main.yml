@@ -1,0 +1,106 @@
+---
+# SummitEthic Platform Frontend Deployment
+# Implements the frontend web application with ethical considerations
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Create frontend directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ frontend_user | default('summitethic') }}"
+    group: "{{ frontend_group | default('summitethic') }}"
+    mode: 0750
+  with_items:
+    - "{{ frontend_base_dir }}"
+    - "{{ frontend_base_dir }}/config"
+    - "{{ frontend_base_dir }}/logs"
+    - "{{ frontend_base_dir }}/nginx-conf"
+    - "{{ frontend_base_dir }}/certs"
+  tags: [directories]
+
+- name: Configure frontend environment variables
+  template:
+    src: environment.js.j2
+    dest: "{{ frontend_base_dir }}/config/environment.js"
+    owner: "{{ frontend_user | default('summitethic') }}"
+    group: "{{ frontend_group | default('summitethic') }}"
+    mode: 0640
+  tags: [config]
+
+- name: Create frontend docker-compose file
+  template:
+    src: frontend-docker-compose.yml.j2
+    dest: "{{ frontend_base_dir }}/docker-compose.yml"
+    owner: "{{ frontend_user | default('summitethic') }}"
+    group: "{{ frontend_group | default('summitethic') }}"
+    mode: 0640
+  tags: [deploy]
+
+- name: Configure Nginx for frontend
+  template:
+    src: nginx.conf.j2
+    dest: "{{ frontend_base_dir }}/nginx-conf/default.conf"
+    owner: "{{ frontend_user | default('summitethic') }}"
+    group: "{{ frontend_group | default('summitethic') }}"
+    mode: 0640
+  tags: [nginx]
+
+- name: Configure Nginx security headers
+  template:
+    src: nginx-security-headers.conf.j2
+    dest: "{{ frontend_base_dir }}/nginx-conf/security-headers.conf"
+    owner: "{{ frontend_user | default('summitethic') }}"
+    group: "{{ frontend_group | default('summitethic') }}"
+    mode: 0640
+  tags: [nginx, security]
+
+- name: Configure Nginx cache control
+  template:
+    src: nginx-cache-control.conf.j2
+    dest: "{{ frontend_base_dir }}/nginx-conf/cache-control.conf"
+    owner: "{{ frontend_user | default('summitethic') }}"
+    group: "{{ frontend_group | default('summitethic') }}"
+    mode: 0640
+  tags: [nginx, cache]
+
+- name: Deploy frontend service
+  docker_compose:
+    project_src: "{{ frontend_base_dir }}"
+    state: present
+  become: true
+  become_user: "{{ frontend_user | default('summitethic') }}"
+  tags: [deploy]
+
+- name: Configure CDN integration
+  include_tasks: cdn.yml
+  when: frontend_use_cdn | bool
+  tags: [cdn]
+
+- name: Configure frontend monitoring
+  include_tasks: monitoring.yml
+  when: frontend_enable_monitoring | bool
+  tags: [monitoring]
+
+- name: Create accessibility documentation
+  template:
+    src: accessibility.md.j2
+    dest: "{{ frontend_base_dir }}/ACCESSIBILITY.md"
+    owner: "{{ frontend_user | default('summitethic') }}"
+    group: "{{ frontend_group | default('summitethic') }}"
+    mode: 0644
+  tags: [accessibility]
+
+- name: Create ethical frontend guidelines
+  template:
+    src: ethical-frontend.md.j2
+    dest: "{{ frontend_base_dir }}/ETHICAL_GUIDELINES.md"
+    owner: "{{ frontend_user | default('summitethic') }}"
+    group: "{{ frontend_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics]

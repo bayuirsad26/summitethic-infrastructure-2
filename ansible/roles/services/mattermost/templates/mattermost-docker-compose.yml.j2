@@ -1,0 +1,120 @@
+# {{ ansible_managed }}
+# SummitEthic Mattermost Configuration
+
+version: '3.8'
+
+services:
+  mattermost:
+    image: mattermost/mattermost-{{ 'enterprise' if not mattermost_team_edition | default(true) else 'team' }}:{{ mattermost_version }}
+    container_name: summitethic-mattermost
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      - MM_USERNAME=mmuser
+      - MM_PASSWORD=${POSTGRES_PASSWORD}
+      - MM_DBNAME=${POSTGRES_DB}
+      {% if mattermost_postgres_host is defined %}
+      - MM_SQLSETTINGS_DATASOURCE=postgres://mmuser:${POSTGRES_PASSWORD}@{{ mattermost_postgres_host }}:5432/${POSTGRES_DB}?sslmode=disable
+      {% else %}
+      - MM_SQLSETTINGS_DATASOURCE=postgres://mmuser:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      {% endif %}
+      - MM_SERVICESETTINGS_SITEURL={{ mattermost_site_url }}
+      - MM_LOGSETTINGS_ENABLECONSOLE={{ 'true' if mattermost_enable_console_logs | default(true) else 'false' }}
+      - MM_LOGSETTINGS_CONSOLELEVEL={{ mattermost_console_log_level | default('INFO') }}
+      - MM_LOGSETTINGS_ENABLEFILE={{ 'true' if mattermost_enable_file_logs | default(true) else 'false' }}
+      - MM_LOGSETTINGS_FILELEVEL={{ mattermost_file_log_level | default('INFO') }}
+      - MM_EMAILSETTINGS_ENABLESMTPAUTH={{ 'true' if mattermost_smtp_auth | default(true) else 'false' }}
+      - MM_EMAILSETTINGS_SMTPUSERNAME={{ mattermost_smtp_username | default('') }}
+      - MM_EMAILSETTINGS_SMTPPASSWORD={{ mattermost_smtp_password | default('') }}
+      - MM_EMAILSETTINGS_SMTPSERVER={{ mattermost_smtp_server | default('') }}
+      - MM_EMAILSETTINGS_SMTPPORT={{ mattermost_smtp_port | default('587') }}
+      - MM_EMAILSETTINGS_ENABLEPREVIEWMODEBANNER={{ 'true' if mattermost_preview_banner | default(false) else 'false' }}
+      - MM_EMAILSETTINGS_FEEDBACKEMAIL={{ mattermost_feedback_email | default('feedback@summitethic.com') }}
+      - MM_EMAILSETTINGS_SENDEMAILNOTIFICATIONS={{ 'true' if mattermost_email_notifications | default(true) else 'false' }}
+      {% if mattermost_plugins_enabled | default(true) %}
+      - MM_PLUGINSETTINGS_ENABLED=true
+      - MM_PLUGINSETTINGS_DIRECTORY=/mattermost/plugins
+      - MM_PLUGINSETTINGS_CLIENTDIRECTORY=/mattermost/client/plugins
+      {% endif %}
+      {% if mattermost_enable_metrics | default(true) %}
+      - MM_METRICSSETTINGS_ENABLE=true
+      - MM_METRICSSETTINGS_LISTENADDRESS=:9100
+      {% endif %}
+      {% for key, value in mattermost_additional_env | default({}) | items %}
+      - {{ key }}={{ value }}
+      {% endfor %}
+    volumes:
+      - ./config:/mattermost/config:rw
+      - ./data:/mattermost/data:rw
+      - ./logs:/mattermost/logs:rw
+      - ./plugins:/mattermost/plugins:rw
+      - ./client/plugins:/mattermost/client/plugins:rw
+      - ./bleve-indexes:/mattermost/bleve-indexes:rw
+    ports:
+      - "{{ mattermost_port | default('127.0.0.1:8065') }}:8065"
+      {% if mattermost_enable_metrics | default(true) %}
+      - "127.0.0.1:9100:9100"
+      {% endif %}
+    networks:
+      - mattermost-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8065/api/v4/system/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      # Ethical labels to document purpose and security status
+      - "org.summitethic.service=mattermost"
+      - "org.summitethic.security-reviewed=true"
+      - "org.summitethic.ethical-clearance=approved"
+      - "org.summitethic.purpose=team-communication"
+      - "org.summitethic.data-classification=internal"
+      - "traefik.enable=true"
+      - "traefik.http.routers.mattermost.rule=Host(`{{ mattermost_domain | default('chat.' + domain) }}`)"
+      - "traefik.http.routers.mattermost.entrypoints=websecure"
+      - "traefik.http.routers.mattermost.tls.certresolver=letsencrypt"
+      - "traefik.http.services.mattermost.loadbalancer.server.port=8065"
+      - "traefik.http.routers.mattermost.middlewares=secHeaders@file"
+
+  {% if not mattermost_external_db | default(false) %}
+  postgres:
+    image: postgres:{{ mattermost_postgres_version | default('14') }}-alpine
+    container_name: summitethic-mattermost-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=mmuser
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - mattermost-postgres:/var/lib/postgresql/data
+    networks:
+      - mattermost-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mmuser -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "org.summitethic.service=mattermost-database"
+      - "org.summitethic.purpose=team-communication-storage"
+  {% endif %}
+
+networks:
+  mattermost-network:
+    driver: bridge
+  {% if mattermost_traefik_network | default(false) %}
+  traefik-network:
+    external: true
+  {% endif %}
+  {% if mattermost_monitoring_network | default(false) %}
+  monitoring-network:
+    external: true
+  {% endif %}
+
+volumes:
+  {% if not mattermost_external_db | default(false) %}
+  mattermost-postgres:
+  {% endif %}

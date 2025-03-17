@@ -1,0 +1,115 @@
+# SummitEthic Ethical Email Policy
+
+## Overview
+
+This document outlines the ethical principles and implementation details of the SummitEthic email service based on Mailcow.
+
+## Core Principles
+
+### 1. Privacy-Respecting Email
+
+Our email system prioritizes user privacy through:
+
+- End-to-end encryption options for secure communication
+- Minimal logging, strictly for operational purposes
+- No content scanning for advertising or profiling
+- Secure handling of all user data
+- Clear retention policies with automatic purging
+
+### 2. Anti-Spam and Security Measures
+
+We combat spam and malicious content ethically by:
+
+- Using privacy-respecting spam filtering techniques
+- Being transparent about filtering decisions
+- Providing user control over filtering strictness
+- Implementing security without invasive scanning
+- Sharing threat intelligence ethically
+
+### 3. Fair Resource Allocation
+
+Email resources are allocated fairly through:
+
+- Reasonable quotas based on legitimate usage patterns
+- Prevention of resource monopolization
+- Efficient use of storage and processing power
+- Alerts for unusual resource consumption
+- Sustainable scaling practices
+
+### 4. Data Sovereignty and Control
+
+Users maintain control of their email data through:
+
+- Data portability with easy import/export options
+- Clear ownership of all user content
+- User-controlled deletion with immediate effect
+- Transparent policies on all data handling
+- No vendor lock-in mechanisms
+
+## Technical Implementation
+
+Our Mailcow implementation has been configured with these ethical considerations:
+
+### Privacy Protections
+
+- SSL/TLS for all connections
+- DNSSEC for domain security
+- DANE/MTA-STS implementation
+- Regular key rotation
+- Privacy-focused logging configuration
+
+### Security Measures
+
+- Modern cryptographic protocols
+- Proactive vulnerability management
+- IP reputation checking without profiling
+- Resource isolation between users
+- Regular security audits
+
+### Resource Management
+
+- Storage quotas: {{ mailcow_default_quota | default('10GB') }} default per user
+- Rate limiting for outbound email
+- Fair CPU/memory allocation per container
+- Backup rotation for efficient storage use
+- Automatic cleanup of temporary files
+
+### Monitoring and Oversight
+
+- Performance monitoring without content inspection
+- Ethical alerts for security anomalies
+- Regular service audits
+- Transparent reporting on service metrics
+- User-viewable usage statistics
+
+## User Rights and Responsibilities
+
+### User Rights
+
+Users of our email service have the right to:
+- Privacy of communications
+- Control over their data
+- Transparent information about service policies
+- Security for their accounts and data
+- Fair access to system resources
+
+### User Responsibilities
+
+Users are expected to:
+- Respect the system's fair use policies
+- Report security concerns or vulnerabilities
+- Use email for ethical, legal purposes
+- Protect their authentication credentials
+- Respect others' privacy and consent in communications
+
+## Responsible Team
+
+For questions about the email service or to report concerns:
+- Email Administrator: {{ mailcow_admin_contact | default('mail-admin@summitethic.com') }}
+- Privacy Officer: {{ mailcow_privacy_contact | default('privacy@summitethic.com') }}
+- Security Team: {{ mailcow_security_contact | default('security@summitethic.com') }}
+
+---
+
+*Last updated: {{ ansible_date_time.date }}*
+*Mailcow Version: {{ mailcow_version }}*

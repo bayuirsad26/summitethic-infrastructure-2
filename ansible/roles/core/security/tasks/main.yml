@@ -1,0 +1,57 @@
+---
+# Security role main tasks
+# Implements comprehensive security hardening following industry best practices
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution | lower }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Display security level
+  debug:
+    msg: "Applying {{ security_level | upper }} security profile to system"
+  tags: [always]
+
+- name: Configure firewall
+  import_tasks: firewall.yml
+  tags: [firewall]
+
+- name: Harden SSH configuration
+  import_tasks: ssh.yml
+  tags: [ssh]
+
+- name: Configure PAM security
+  import_tasks: pam.yml
+  tags: [pam]
+  when: security_level != 'low'
+
+- name: Setup audit daemon
+  import_tasks: auditd.yml
+  tags: [audit]
+  when: security_level != 'low'
+
+- name: Configure file integrity monitoring (AIDE)
+  import_tasks: aide.yml
+  tags: [aide]
+  when: security_level == 'high' or security_level == 'maximum'
+
+- name: Apply kernel security parameters
+  import_tasks: kernel.yml
+  tags: [kernel]
+
+- name: Apply account security policies
+  import_tasks: accounts.yml
+  tags: [accounts]
+
+- name: Configure malware protection
+  import_tasks: malware.yml
+  tags: [malware]
+  when: security_level != 'low'
+
+- name: Run compliance checks
+  import_tasks: compliance/main.yml
+  tags: [compliance]
+  when: security_level == 'maximum' and security_compliance_check | bool

@@ -1,0 +1,102 @@
+---
+# Configure MinIO buckets
+
+- name: Install Python MinIO client dependencies
+  pip:
+    name:
+      - minio
+      - configparser
+    state: present
+  tags: [dependencies]
+
+- name: Create MinIO client config directory
+  file:
+    path: /root/.mc
+    state: directory
+    owner: root
+    group: root
+    mode: 0700
+  tags: [mc-config]
+
+- name: Create MinIO client configuration
+  template:
+    src: mc-config.json.j2
+    dest: /root/.mc/config.json
+    owner: root
+    group: root
+    mode: 0600
+  no_log: true
+  tags: [mc-config]
+
+- name: Create bucket creation script
+  template:
+    src: create-buckets.sh.j2
+    dest: "{{ minio_base_dir }}/create-buckets.sh"
+    owner: root
+    group: root
+    mode: 0700
+  tags: [scripts]
+
+- name: Execute bucket creation script
+  command: "{{ minio_base_dir }}/create-buckets.sh"
+  register: bucket_result
+  changed_when: "'already exists' not in bucket_result.stderr"
+  tags: [buckets]
+
+- name: Create default bucket policies
+  template:
+    src: "policies/{{ item.policy }}.json.j2"
+    dest: "{{ minio_base_dir }}/policies/{{ item.policy }}.json"
+    owner: root
+    group: root
+    mode: 0640
+  with_items: "{{ minio_buckets }}"
+  when: item.policy is defined
+  tags: [policies]
+
+- name: Apply bucket policies
+  command: "mc policy set {{ item.policy }} local/{{ item.name }}"
+  with_items: "{{ minio_buckets }}"
+  when: item.policy is defined
+  register: policy_result
+  changed_when: policy_result.rc == 0
+  tags: [policies]
+
+- name: Configure bucket encryption
+  command: >
+    mc encrypt set {{ item.encryption.type | default('sse-s3') }} local/{{ item.name }}
+  with_items: "{{ minio_buckets }}"
+  when: item.encryption is defined and item.encryption.enabled | bool
+  register: encryption_result
+  changed_when: encryption_result.rc == 0
+  tags: [encryption]
+
+- name: Configure bucket lifecycle rules
+  template:
+    src: lifecycle-config.json.j2
+    dest: "{{ minio_base_dir }}/policies/lifecycle-{{ item.name }}.json"
+    owner: root
+    group: root
+    mode: 0640
+  with_items: "{{ minio_buckets }}"
+  when: item.lifecycle is defined
+  register: lifecycle_config
+  tags: [lifecycle]
+
+- name: Apply bucket lifecycle rules
+  command: >
+    mc ilm import local/{{ item.name }} {{ minio_base_dir }}/policies/lifecycle-{{ item.name }}.json
+  with_items: "{{ minio_buckets }}"
+  when: item.lifecycle is defined
+  register: lifecycle_result
+  changed_when: lifecycle_result.rc == 0
+  tags: [lifecycle]
+
+- name: Document bucket configurations
+  template:
+    src: bucket-documentation.md.j2
+    dest: "{{ minio_base_dir }}/BUCKET_DOCUMENTATION.md"
+    owner: root
+    group: root
+    mode: 0644
+  tags: [documentation]

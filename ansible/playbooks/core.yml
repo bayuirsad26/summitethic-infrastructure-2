@@ -1,0 +1,44 @@
+---
+# Core configuration deployment for SummitEthic infrastructure
+# This playbook configures base settings and security for all servers
+
+- name: Apply core configuration to all nodes
+  hosts: all
+  become: true
+  gather_facts: true
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/all/main.yml"
+    - "{{ inventory_dir }}/group_vars/all/security.yml"
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+      changed_when: false
+      when: ansible_os_family == "Debian"
+      tags: [always]
+
+    - name: Display ethical deployment notice
+      debug:
+        msg:
+          - "SummitEthic Infrastructure Deployment"
+          - "This deployment follows ethical principles and best practices"
+          - "Maintaining transparency and accountability in all operations"
+      tags: [always]
+
+  roles:
+    - role: core/common
+      tags: [common]
+
+    - role: core/security
+      tags: [security]
+      vars:
+        security_audit_only: false
+        security_level: high
+
+    - role: core/user_setup
+      tags: [users]
+
+    - role: core/container_orchestration
+      tags: [containers]
+      when: "'container_hosts' in group_names"

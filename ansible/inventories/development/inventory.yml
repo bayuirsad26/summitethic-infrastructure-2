@@ -1,0 +1,69 @@
+---
+# Development environment inventory for SummitEthic
+
+all:
+  hosts:
+    dev-control:
+      ansible_host: 10.0.0.10
+      ansible_connection: ssh
+      ansible_user: summitethic
+      ansible_ssh_private_key_file: ~/.ssh/summitethic_dev_key
+      control_node: true
+
+  children:
+    web_servers:
+      hosts:
+        dev-web-01:
+          ansible_host: 10.0.1.101
+          nginx_domains:
+            - "app1.dev.summitethic.com"
+            - "app2.dev.summitethic.com"
+          cpus: 2
+          memory: "4G"
+          services:
+            - traefik
+            - nginx
+
+    app_servers:
+      hosts:
+        dev-app-01:
+          ansible_host: 10.0.1.201
+          cpus: 2
+          memory: "4G"
+          services:
+            - node
+            - python
+
+    db_servers:
+      hosts:
+        dev-db-01:
+          ansible_host: 10.0.2.101
+          postgres_version: "14"
+          postgres_replication_role: "primary"
+          postgres_shared_buffers: "1GB"
+          postgres_max_connections: 100
+          postgres_data_dir: "/var/lib/postgresql/14/main"
+          db_backup_enabled: true
+
+    monitoring_servers:
+      hosts:
+        dev-monitoring-01:
+          ansible_host: 10.0.3.101
+          prometheus_retention: "7d"
+          grafana_admin_user: "admin"
+          grafana_domain: "monitoring.dev.summitethic.com"
+          alertmanager_enabled: true
+
+    container_hosts:
+      hosts:
+        dev-web-01:
+        dev-app-01:
+        dev-monitoring-01:
+
+    development:
+      children:
+        web_servers:
+        app_servers:
+        db_servers:
+        monitoring_servers:
+        container_hosts:

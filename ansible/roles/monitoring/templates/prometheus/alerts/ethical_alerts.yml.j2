@@ -1,0 +1,44 @@
+# {{ ansible_managed }}
+# SummitEthic ethical monitoring alerts
+groups:
+- name: ethical_alerts
+  rules:
+  - alert: UnusualDataAccessPattern
+    expr: rate(app_data_access_count{sensitive="true"}[5m]) > 3 * avg_over_time(rate(app_data_access_count{sensitive="true"}[5m])[1d:5m])
+    for: 5m
+    labels:
+      severity: warning
+      category: ethics
+    annotations:
+      summary: "Unusual access pattern to sensitive data detected"
+      description: "There has been an unusual spike in sensitive data access that may require review. User: {{ "{{" }} $labels.user {{ "}}" }}, Resource: {{ "{{" }} $labels.resource {{ "}}" }}"
+      
+  - alert: ExcessiveUserDataAccess
+    expr: sum by(user) (rate(user_data_access_total[15m])) > {{ user_data_access_threshold }}
+    for: 15m
+    labels:
+      severity: warning
+      category: ethics
+    annotations:
+      summary: "Excessive user data access"
+      description: "User {{ "{{" }} $labels.user {{ "}}" }} is accessing an unusually high volume of user data"
+  
+  - alert: UnauthorizedConfigChange
+    expr: config_change_total{authorized="false"} > 0
+    for: 1m
+    labels:
+      severity: critical
+      category: ethics
+    annotations:
+      summary: "Unauthorized configuration change detected"
+      description: "System detected an unauthorized configuration change: {{ "{{" }} $labels.component {{ "}}" }} by {{ "{{" }} $labels.user_id {{ "}}" }}"
+  
+  - alert: ResourceUsageImbalance
+    expr: sum by(tenant) (container_cpu_usage_seconds_total) / sum by(tenant) (container_cpu_allocation) > 0.8
+    for: 30m
+    labels:
+      severity: warning
+      category: ethics
+    annotations:
+      summary: "Resource utilization imbalance detected"
+      description: "Tenant {{ "{{" }} $labels.tenant {{ "}}" }} is using more than 80% of allocated resources, which may impact fair distribution"

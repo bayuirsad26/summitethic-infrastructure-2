@@ -1,0 +1,130 @@
+# {{ ansible_managed }}
+# SummitEthic Logging Stack - Security Level: {{ security_level }}
+
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:{{ elasticsearch_version }}
+    container_name: elasticsearch
+    environment:
+      - node.name=elasticsearch-node
+      - cluster.name=summitethic-logging
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms{{ elasticsearch_jvm_memory | default('512m') }} -Xmx{{ elasticsearch_jvm_memory | default('512m') }}"
+      - xpack.security.enabled={{ elasticsearch_security_enabled | default(true) | lower }}
+      {% if elasticsearch_security_enabled | default(true) %}
+      - ELASTIC_PASSWORD={{ elasticsearch_password | default('changeme') }}
+      {% endif %}
+      - xpack.monitoring.collection.enabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ./elasticsearch/data:/usr/share/elasticsearch/data
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ./elasticsearch/config/jvm.options:/usr/share/elasticsearch/config/jvm.options.d/jvm.options:ro
+    ports:
+      - "127.0.0.1:9200:9200"
+    networks:
+      - logging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -v '\"status\":\"red\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    labels:
+      # Ethical labels to document purpose and data handling
+      - "org.summitethic.service=elasticsearch"
+      - "org.summitethic.data-type=logs-only"
+      - "org.summitethic.retention-policy=specified"
+      - "org.summitethic.pii-handling=limited"
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:{{ logstash_version }}
+    container_name: logstash
+    environment:
+      - "LS_JAVA_OPTS=-Xms{{ logstash_jvm_memory | default('256m') }} -Xmx{{ logstash_jvm_memory | default('256m') }}"
+    volumes:
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./logstash/config/jvm.options:/usr/share/logstash/config/jvm.options:ro
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logstash/patterns:/usr/share/logstash/patterns:ro
+    ports:
+      - "127.0.0.1:5044:5044"
+      - "127.0.0.1:9600:9600"
+    networks:
+      - logging
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600/_node/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "org.summitethic.service=logstash"
+      - "org.summitethic.data-processing=log-processing-only"
+      - "org.summitethic.pii-handling=anonymization-enabled"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:{{ kibana_version }}
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      {% if elasticsearch_security_enabled | default(true) %}
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD={{ kibana_password | default('changeme') }}
+      {% endif %}
+    volumes:
+      - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+      - ./kibana/saved_objects:/usr/share/kibana/saved_objects:ro
+    ports:
+      - "127.0.0.1:5601:5601"
+    networks:
+      - logging
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "org.summitethic.service=kibana"
+      - "org.summitethic.purpose=log-visualization"
+      - "org.summitethic.access-control=strict"
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:{{ filebeat_version }}
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./filebeat/config/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/modules:/usr/share/filebeat/modules.d:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - logging
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch
+      - logstash
+    command: filebeat -e -strict.perms=false
+    labels:
+      - "org.summitethic.service=filebeat"
+      - "org.summitethic.purpose=log-collection"
+      - "org.summitethic.permission=limited-access"
+
+networks:
+  logging:
+    driver: bridge

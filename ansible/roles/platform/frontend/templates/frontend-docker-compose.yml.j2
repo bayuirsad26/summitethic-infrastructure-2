@@ -1,0 +1,74 @@
+# {{ ansible_managed }}
+# SummitEthic Platform Frontend
+
+version: '3.8'
+
+services:
+  frontend:
+    image: {{ frontend_image }}:{{ frontend_version }}
+    container_name: summitethic-frontend
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config:ro
+      {% if frontend_use_custom_theme | bool %}
+      - ./theme:/app/public/theme:ro
+      {% endif %}
+    environment:
+      - NODE_ENV={{ frontend_environment | default('production') }}
+      - API_URL={{ frontend_api_url }}
+      - PUBLIC_URL={{ frontend_public_url }}
+      - REACT_APP_ENVIRONMENT={{ frontend_environment | default('production') }}
+    networks:
+      - frontend_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health.json"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      # Ethical labels to document purpose and security status
+      - "org.summitethic.service=frontend"
+      - "org.summitethic.security-reviewed=true"
+      - "org.summitethic.ethical-clearance=approved"
+      - "org.summitethic.accessibility=wcag-2.1-aa"
+      
+  nginx:
+    image: nginx:{{ nginx_version | default('1.23') }}-alpine
+    container_name: summitethic-frontend-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx-conf:/etc/nginx/conf.d:ro
+      {% if frontend_custom_static_files | bool %}
+      - ./static:/usr/share/nginx/html/static:ro
+      {% endif %}
+      {% if frontend_use_local_certs | bool %}
+      - ./certs:/etc/nginx/certs:ro
+      {% endif %}
+      - ./logs:/var/log/nginx
+    ports:
+      - "{{ frontend_port | default('127.0.0.1:8080') }}:80"
+    depends_on:
+      - frontend
+    networks:
+      - frontend_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health.txt"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      # Ethical labels to document purpose and security status
+      - "org.summitethic.service=frontend-proxy"
+      - "org.summitethic.security-reviewed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`{{ frontend_domain | default(domain) }}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.frontend.middlewares=secHeaders@file"
+
+networks:
+  frontend_network:
+    driver: bridge

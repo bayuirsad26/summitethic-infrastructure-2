@@ -1,0 +1,27 @@
+---
+# Main entry point for SummitEthic infrastructure deployment
+# This playbook orchestrates the entire infrastructure deployment
+
+- name: Apply common configuration to all nodes
+  import_playbook: core.yml
+  tags: [core, always]
+
+- name: Deploy infrastructure services
+  import_playbook: services.yml
+  tags: [services]
+
+- name: Deploy SummitEthic platform
+  import_playbook: platform.yml
+  tags: [platform]
+
+- name: Configure monitoring and logging
+  import_playbook: monitoring.yml
+  tags: [monitoring]
+
+- name: Configure logging stack
+  import_playbook: logging.yml
+  tags: [logging]
+
+- name: Configure backup systems
+  import_playbook: backup.yml
+  tags: [backup]

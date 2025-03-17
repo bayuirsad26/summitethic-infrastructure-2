@@ -1,0 +1,81 @@
+# {{ ansible_managed }}
+# SummitEthic SSO Configuration - Keycloak
+
+version: '3.8'
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:{{ keycloak_version | default('20.0.3') }}
+    container_name: summitethic-keycloak
+    restart: unless-stopped
+    env_file:
+      - ./config/keycloak.env
+    command:
+      - start{% if keycloak_dev_mode | default(false) %}-dev{% endif %}
+      {% if keycloak_import_file is defined and keycloak_import_file %}
+      - --import-realm
+      {% endif %}
+    volumes:
+      - ./data:/opt/keycloak/data
+      - ./themes:/opt/keycloak/themes
+      - ./certs:/opt/keycloak/certs
+      {% if keycloak_import_file is defined and keycloak_import_file %}
+      - ./exports/{{ keycloak_import_file }}:/opt/keycloak/data/import/realm.json
+      {% endif %}
+    ports:
+      - "{{ sso_port | default('127.0.0.1:8080') }}:8080"
+      {% if sso_enable_https | default(true) %}
+      - "{{ sso_https_port | default('127.0.0.1:8443') }}:8443"
+      {% endif %}
+    depends_on:
+      - keycloak-db
+    networks:
+      - keycloak-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      # Ethical labels to document purpose and security status
+      - "org.summitethic.service=keycloak"
+      - "org.summitethic.security-reviewed=true"
+      - "org.summitethic.ethical-clearance=approved"
+      - "org.summitethic.data-classification=auth-data"
+      - "org.summitethic.purpose=authentication-provider"
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=Host(`{{ sso_domain | default('sso.' + domain) }}`)"
+      - "traefik.http.routers.keycloak.entrypoints=websecure"
+      - "traefik.http.routers.keycloak.tls.certresolver=letsencrypt"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+      - "traefik.http.routers.keycloak.middlewares=secHeaders@file"
+
+  keycloak-db:
+    image: postgres:{{ keycloak_db_version | default('14') }}-alpine
+    container_name: summitethic-keycloak-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${KC_DB_URL_DATABASE}
+      POSTGRES_USER: ${KC_DB_USERNAME}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    networks:
+      - keycloak-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KC_DB_USERNAME} -d ${KC_DB_URL_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "org.summitethic.service=keycloak-database"
+      - "org.summitethic.purpose=auth-data-storage"
+
+networks:
+  keycloak-network:
+    driver: bridge
+
+volumes:
+  keycloak-db-data:

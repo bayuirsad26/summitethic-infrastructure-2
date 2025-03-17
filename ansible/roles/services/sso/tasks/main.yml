@@ -1,0 +1,99 @@
+---
+# SummitEthic SSO Service Implementation
+# Implements Keycloak for centralized authentication
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Create SSO directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ sso_user | default('summitethic') }}"
+    group: "{{ sso_group | default('summitethic') }}"
+    mode: 0750
+  with_items:
+    - "{{ sso_base_dir }}"
+    - "{{ sso_base_dir }}/config"
+    - "{{ sso_base_dir }}/data"
+    - "{{ sso_base_dir }}/themes"
+    - "{{ sso_base_dir }}/exports"
+    - "{{ sso_base_dir }}/certs"
+  tags: [directories]
+
+- name: Configure SSO environment variables
+  template:
+    src: keycloak.env.j2
+    dest: "{{ sso_base_dir }}/config/keycloak.env"
+    owner: "{{ sso_user | default('summitethic') }}"
+    group: "{{ sso_group | default('summitethic') }}"
+    mode: 0640
+  no_log: true
+  tags: [config]
+
+- name: Create SSO docker-compose file
+  template:
+    src: keycloak-docker-compose.yml.j2
+    dest: "{{ sso_base_dir }}/docker-compose.yml"
+    owner: "{{ sso_user | default('summitethic') }}"
+    group: "{{ sso_group | default('summitethic') }}"
+    mode: 0640
+  tags: [deploy]
+
+- name: Configure Keycloak database
+  include_tasks: database.yml
+  when: sso_configure_database | bool
+  tags: [database]
+
+- name: Deploy Keycloak service
+  docker_compose:
+    project_src: "{{ sso_base_dir }}"
+    state: present
+  become: true
+  become_user: "{{ sso_user | default('summitethic') }}"
+  tags: [deploy]
+
+- name: Wait for Keycloak to be available
+  uri:
+    url: "http{{ 's' if sso_enable_https else '' }}://localhost:{{ sso_port }}/auth/realms/master"
+    follow_redirects: none
+    validate_certs: "{{ sso_validate_certs | default(true) }}"
+    status_code: 200
+  register: keycloak_result
+  until: keycloak_result.status == 200
+  retries: 30
+  delay: 5
+  tags: [deploy]
+
+- name: Configure LDAP integration
+  include_tasks: ldap_integration.yml
+  when: sso_ldap_enabled | bool
+  tags: [ldap]
+
+- name: Configure Keycloak realms
+  include_tasks: realms.yml
+  when: sso_configure_realms | bool
+  tags: [realms]
+
+- name: Configure Keycloak clients
+  include_tasks: clients.yml
+  when: sso_configure_clients | bool
+  tags: [clients]
+
+- name: Configure Keycloak security
+  include_tasks: security.yml
+  when: sso_security_level != 'low'
+  tags: [security]
+
+- name: Create ethical authentication documentation
+  template:
+    src: ethical-authentication.md.j2
+    dest: "{{ sso_base_dir }}/ETHICAL_AUTHENTICATION.md"
+    owner: "{{ sso_user | default('summitethic') }}"
+    group: "{{ sso_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics, documentation]

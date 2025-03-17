@@ -1,0 +1,224 @@
+---
+# SummitEthic Add Website Playbook
+# This playbook adds a new website to the platform
+
+- name: Add new website to SummitEthic platform
+  hosts: web_servers
+  become: true
+  gather_facts: true
+  vars:
+    website_name: "{{ domain | default('example.com') }}"
+    website_template: "{{ template | default('standard') }}"
+    website_root: "/var/www/{{ domain | default('example.com') }}"
+    website_owner: "www-data"
+    website_group: "www-data"
+    website_https: "{{ https_enabled | default(true) | bool }}"
+    website_monitoring: "{{ monitoring_enabled | default(true) | bool }}"
+    website_backups: "{{ backups_enabled | default(true) | bool }}"
+    website_cdn: "{{ cdn_enabled | default(false) | bool }}"
+    deployment_id: "{{ deploy_id | default(lookup('pipe', 'date +%Y%m%d%H%M%S')) }}"
+    deploy_dir: "/tmp/website-deploy-{{ deployment_id }}"
+
+  pre_tasks:
+    - name: Validate website inputs
+      assert:
+        that:
+          - website_name is regex('^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+          - website_template in ['standard', 'blog', 'ecommerce', 'portfolio']
+        msg: "Invalid domain name or template. Domain must be valid and template must be one of: standard, blog, ecommerce, portfolio"
+      tags: [validation]
+
+    - name: Check if website already exists
+      stat:
+        path: "{{ website_root }}"
+      register: website_exists
+      tags: [validation]
+
+    - name: Confirm overwrite if website exists
+      pause:
+        prompt: "Website directory already exists. Do you want to continue and overwrite? (yes/no)"
+      register: overwrite_confirm
+      when: website_exists.stat.exists
+      tags: [validation]
+
+    - name: Exit if user chose not to overwrite
+      meta: end_play
+      when:
+        - website_exists.stat.exists
+        - overwrite_confirm.user_input | default('no') | lower != 'yes'
+      tags: [validation]
+
+    - name: Create temporary deployment directory
+      file:
+        path: "{{ deploy_dir }}"
+        state: directory
+        mode: 0755
+      tags: [setup]
+
+  tasks:
+    - name: Create website directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ website_owner }}"
+        group: "{{ website_group }}"
+        mode: 0755
+      with_items:
+        - "{{ website_root }}"
+        - "{{ website_root }}/public"
+        - "{{ website_root }}/logs"
+        - "{{ website_root }}/backups"
+        - "{{ website_root }}/config"
+      tags: [directories]
+
+    - name: Clone website template repository
+      git:
+        repo: "{{ website_template_repo }}"
+        dest: "{{ deploy_dir }}/template"
+        version: "{{ website_template_version | default('main') }}"
+      vars:
+        website_template_repo: "https://github.com/summitethic/{{ website_template }}-template.git"
+      tags: [template]
+
+    - name: Configure website template
+      template:
+        src: "{{ deploy_dir }}/template/config.yml.j2"
+        dest: "{{ deploy_dir }}/config.yml"
+      tags: [template]
+
+    - name: Copy website files from template
+      synchronize:
+        src: "{{ deploy_dir }}/template/public/"
+        dest: "{{ website_root }}/public/"
+      delegate_to: "{{ inventory_hostname }}"
+      tags: [template]
+
+    - name: Configure website settings
+      template:
+        src: "{{ deploy_dir }}/template/settings.php.j2"
+        dest: "{{ website_root }}/config/settings.php"
+        owner: "{{ website_owner }}"
+        group: "{{ website_group }}"
+        mode: 0640
+      vars:
+        site_name: "{{ website_name }}"
+        site_template: "{{ website_template }}"
+        site_url: "{{ 'https' if website_https else 'http' }}://{{ website_name }}"
+        site_admin_email: "admin@{{ website_name }}"
+      tags: [config]
+
+    - name: Configure Nginx virtual host
+      template:
+        src: nginx-vhost.conf.j2
+        dest: "/etc/nginx/sites-available/{{ website_name }}.conf"
+      tags: [web_server]
+
+    - name: Enable Nginx virtual host
+      file:
+        src: "/etc/nginx/sites-available/{{ website_name }}.conf"
+        dest: "/etc/nginx/sites-enabled/{{ website_name }}.conf"
+        state: link
+      notify: reload_nginx
+      tags: [web_server]
+
+    - name: Configure SSL certificate with Let's Encrypt
+      include_role:
+        name: letsencrypt
+        tasks_from: request_cert
+      vars:
+        domain_name: "{{ website_name }}"
+        alt_names: "{{ website_alt_names | default(['www.' + website_name]) }}"
+      when: website_https
+      tags: [ssl]
+
+    - name: Configure website backups
+      include_role:
+        name: backup
+        tasks_from: configure_site_backup
+      vars:
+        site_name: "{{ website_name }}"
+        site_root: "{{ website_root }}"
+        backup_retention: "{{ website_backup_retention | default(30) }}"
+      when: website_backups
+      tags: [backup]
+
+    - name: Configure website monitoring
+      include_role:
+        name: monitoring
+        tasks_from: configure_site_monitoring
+      vars:
+        site_name: "{{ website_name }}"
+        site_url: "{{ 'https' if website_https else 'http' }}://{{ website_name }}"
+        site_check_path: "{{ website_health_path | default('/health') }}"
+      when: website_monitoring
+      tags: [monitoring]
+
+    - name: Configure CDN distribution if enabled
+      include_role:
+        name: platform/frontend
+        tasks_from: cdn
+      vars:
+        domain_name: "{{ website_name }}"
+        origin_path: "/public"
+      when: website_cdn
+      tags: [cdn]
+
+    - name: Update Traefik configuration if using Traefik
+      template:
+        src: traefik-website.yml.j2
+        dest: "{{ traefik_config_dir }}/dynamic/websites/{{ website_name }}.yml"
+      when: "'traefik' in services | default(['nginx'])"
+      notify: reload_traefik
+      tags: [traefik]
+
+    - name: Set permissions on website files
+      file:
+        path: "{{ website_root }}"
+        owner: "{{ website_owner }}"
+        group: "{{ website_group }}"
+        recurse: yes
+      tags: [permissions]
+
+    - name: Create website documentation
+      template:
+        src: website-docs.md.j2
+        dest: "{{ website_root }}/README.md"
+        owner: "{{ website_owner }}"
+        group: "{{ website_group }}"
+        mode: 0644
+      tags: [documentation]
+
+  post_tasks:
+    - name: Generate website deployment report
+      template:
+        src: website-deployment-report.j2
+        dest: "/var/log/summitethic/website-deployments/{{ website_name }}-{{ deployment_id }}.log"
+      tags: [report]
+
+    - name: Clean up temporary files
+      file:
+        path: "{{ deploy_dir }}"
+        state: absent
+      tags: [cleanup]
+
+    - name: Display website deployment success message
+      debug:
+        msg:
+          - "Website deployment completed successfully!"
+          - "Website: {{ website_name }}"
+          - "Template: {{ website_template }}"
+          - "HTTPS: {{ 'Enabled' if website_https else 'Disabled' }}"
+          - "Deployment ID: {{ deployment_id }}"
+      tags: [always]
+
+  handlers:
+    - name: reload_nginx
+      service:
+        name: nginx
+        state: reloaded
+
+    - name: reload_traefik
+      shell: docker-compose -f {{ traefik_config_dir }}/docker-compose.yml exec -T traefik traefik reload
+      args:
+        chdir: "{{ traefik_config_dir }}"
+      when: "'traefik' in services | default(['nginx'])"

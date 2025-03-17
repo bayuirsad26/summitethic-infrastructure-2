@@ -1,0 +1,48 @@
+---
+# Monitoring stack implementation
+# Sets up Prometheus, Grafana, and alerting
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Check prerequisites
+  import_tasks: prerequisites.yml
+  tags: [prerequisites]
+
+- name: Setup Prometheus
+  import_tasks: prometheus/main.yml
+  tags: [prometheus]
+
+- name: Setup Grafana
+  import_tasks: grafana/main.yml
+  tags: [grafana]
+
+- name: Setup Alertmanager
+  import_tasks: alertmanager/main.yml
+  tags: [alertmanager]
+
+- name: Setup Node Exporter
+  import_tasks: node_exporter.yml
+  tags: [node_exporter]
+
+- name: Setup cAdvisor
+  import_tasks: cadvisor.yml
+  tags: [cadvisor]
+  when: "'container_hosts' in group_names"
+
+- name: Configure audit logging
+  import_tasks: audit_logging.yml
+  tags: [audit]
+
+- name: Setup ethical monitoring policies
+  template:
+    src: ethical_monitoring_policy.yml.j2
+    dest: /etc/summitethic/monitoring/ethical_policy.yml
+    owner: root
+    group: root
+    mode: 0644
+  tags: [ethics]

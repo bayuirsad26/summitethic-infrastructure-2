@@ -1,0 +1,92 @@
+# {{ ansible_managed }}
+# SummitEthic Ethical Analytics Platform - Plausible
+
+version: '3.8'
+
+services:
+  plausible:
+    image: plausible/analytics:{{ analytics_version | default('latest') }}
+    container_name: summitethic-analytics
+    restart: unless-stopped
+    command: sh -c "sleep 10 && /entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh db init-admin && /entrypoint.sh run"
+    depends_on:
+      - plausible_db
+      - plausible_events_db
+    env_file:
+      - ./config/analytics.env
+    volumes:
+      {% if analytics_geoip_enabled | bool %}
+      - ./geoip:/geoip:ro
+      {% endif %}
+    ports:
+      - "{{ analytics_port | default('127.0.0.1:8000') }}:8000"
+    networks:
+      - analytics_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      # Ethical labels to document purpose and security status
+      - "org.summitethic.service=analytics"
+      - "org.summitethic.security-reviewed=true"
+      - "org.summitethic.ethical-clearance=approved"
+      - "org.summitethic.data-privacy=privacy-first"
+      - "org.summitethic.cookie-usage=cookieless"
+      - "org.summitethic.ip-anonymization=enabled"
+      - "traefik.enable=true"
+      - "traefik.http.routers.analytics.rule=Host(`{{ analytics_domain | default('analytics.' + domain) }}`)"
+      - "traefik.http.routers.analytics.entrypoints=websecure"
+      - "traefik.http.routers.analytics.tls.certresolver=letsencrypt"
+      - "traefik.http.services.analytics.loadbalancer.server.port=8000"
+      - "traefik.http.routers.analytics.middlewares=secHeaders@file"
+
+  plausible_db:
+    image: postgres:{{ analytics_postgres_version | default('14') }}-alpine
+    container_name: summitethic-analytics-db
+    restart: unless-stopped
+    volumes:
+      - plausible_db_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    networks:
+      - analytics_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  plausible_events_db:
+    image: clickhouse/clickhouse-server:{{ analytics_clickhouse_version | default('22.6') }}
+    container_name: summitethic-analytics-events
+    restart: unless-stopped
+    volumes:
+      - plausible_events_data:/var/lib/clickhouse
+      - ./config/clickhouse-config.xml:/etc/clickhouse-server/config.d/logging.xml:ro
+      - ./config/clickhouse-user-config.xml:/etc/clickhouse-server/users.d/logging.xml:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    networks:
+      - analytics_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  analytics_network:
+    driver: bridge
+
+volumes:
+  plausible_db_data:
+  plausible_events_data:

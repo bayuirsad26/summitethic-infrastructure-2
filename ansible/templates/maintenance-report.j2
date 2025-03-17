@@ -1,0 +1,116 @@
+# SummitEthic Infrastructure Maintenance Report
+
+**Date:** {{ maintenance_date }}
+**Host:** {{ inventory_hostname }}
+**Performed by:** {{ lookup('env', 'USER') }}
+
+## System Updates
+
+{% if apt_update is defined %}
+- Package cache update: {{ 'Completed' if apt_update.changed else 'Not required' }}
+{% endif %}
+
+{% if apt_upgrade is defined %}
+- Package upgrades: {{ 'Completed' if apt_upgrade.changed else 'Not required' }}
+{% endif %}
+
+{% if reboot_required is defined %}
+- Reboot status: {{ 'Required' if reboot_required.stat.exists else 'Not required' }}
+{% if reboot_required.stat.exists and auto_reboot|default(false) %}
+- System was rebooted automatically
+{% elif reboot_required.stat.exists and not auto_reboot|default(false) %}
+- **Manual reboot required**
+{% endif %}
+{% endif %}
+
+## Cleanup Operations
+
+{% if apt_clean is defined %}
+- APT cleanup: {{ 'Completed' if apt_clean.changed else 'Not required' }}
+{% endif %}
+
+{% if container_prune is defined %}
+- Docker container cleanup: {{ container_prune.stdout_lines | join(' ') }}
+{% endif %}
+
+{% if image_prune is defined %}
+- Docker image cleanup: {{ image_prune.stdout_lines | join(' ') }}
+{% endif %}
+
+{% if volume_prune is defined %}
+- Docker volume cleanup: {{ volume_prune.stdout_lines | join(' ') }}
+{% endif %}
+
+{% if old_logs is defined and old_logs.matched > 0 %}
+- Found {{ old_logs.matched }} old log files that could be cleaned
+{% endif %}
+
+## System Health
+
+### Disk Space Status
+```
+{{ disk_space.stdout }}
+```
+
+### Memory Status
+```
+{{ memory_status.stdout }}
+```
+
+### Failed Services
+```
+{{ failed_services.stdout }}
+```
+
+{% if zombie_count is defined and zombie_count.stdout|int > 0 %}
+### Zombie Processes
+Found {{ zombie_count.stdout }} zombie processes that should be investigated.
+{% endif %}
+
+### High CPU Processes
+```
+{{ high_cpu.stdout }}
+```
+
+## Large Files Identified
+```
+{{ large_files.stdout }}
+```
+
+## Recommendations
+
+Based on the maintenance tasks performed, the following recommendations are provided:
+
+{% if reboot_required is defined and reboot_required.stat.exists and not auto_reboot|default(false) %}
+- **Schedule a reboot** of this system to apply all updates
+{% endif %}
+
+{% if old_logs is defined and old_logs.matched > 10 %}
+- Review log rotation settings to better manage log files
+{% endif %}
+
+{% if disk_space is defined and '9[0-9]%' in disk_space.stdout %}
+- **Urgent: Disk space critically low** - Investigate and clean up
+{% elif disk_space is defined and '8[0-9]%' in disk_space.stdout %}
+- Disk space usage high - Schedule cleanup operations
+{% endif %}
+
+{% if failed_services is defined and failed_services.stdout | trim | length > 0 %}
+- Investigate and restore failed services
+{% endif %}
+
+{% if ansible_facts.services is defined %}
+{% set service_issues = [] %}
+{% for service in critical_services|default(['ssh']) %}
+{% if service in ansible_facts.services and ansible_facts.services[service].state != 'running' %}
+{% set service_issues = service_issues + [service] %}
+{% endif %}
+{% endfor %}
+{% if service_issues|length > 0 %}
+- Critical services not running: {{ service_issues|join(', ') }}
+{% endif %}
+{% endif %}
+
+---
+
+*This report was automatically generated as part of SummitEthic's infrastructure maintenance procedures.*

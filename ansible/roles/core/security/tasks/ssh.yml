@@ -1,0 +1,53 @@
+---
+# SSH hardening according to industry best practices
+
+- name: Ensure SSH server is installed
+  package:
+    name: openssh-server
+    state: present
+
+- name: Configure SSH server
+  template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: 0600
+    validate: "/usr/sbin/sshd -t -f %s"
+  notify: restart_ssh
+  register: ssh_config
+
+- name: Create SSH banner
+  template:
+    src: issue.net.j2
+    dest: /etc/issue.net
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart_ssh
+
+- name: Ensure .ssh directory exists
+  file:
+    path: "/root/.ssh"
+    state: directory
+    owner: root
+    group: root
+    mode: 0700
+
+- name: Ensure authorized_keys file has proper permissions
+  file:
+    path: "/root/.ssh/authorized_keys"
+    state: touch
+    owner: root
+    group: root
+    mode: 0600
+    modification_time: preserve
+    access_time: preserve
+  when: not ansible_check_mode
+
+- name: Generate stronger ssh host keys (ED25519)
+  command: ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -N "" -q
+  args:
+    creates: /etc/ssh/ssh_host_ed25519_key
+  notify: restart_ssh
+  when: security_level == 'high' or security_level == 'maximum'

@@ -1,0 +1,74 @@
+# {{ ansible_managed }}
+# SummitEthic Redis Configuration
+
+version: '3.8'
+
+services:
+  redis:
+    image: redis:{{ redis_version | default('7.0') }}-alpine
+    container_name: summitethic-redis
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data:/data
+    ports:
+      - "{{ redis_port | default('127.0.0.1:6379') }}:6379"
+      {% if redis_tls_enabled | default(false) %}
+      - "{{ redis_tls_port | default('127.0.0.1:6380') }}:6380"
+      {% endif %}
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    sysctls:
+      net.core.somaxconn: 1024
+    labels:
+      # Ethical labels to document purpose and resource usage
+      - "org.summitethic.service=redis"
+      - "org.summitethic.security-reviewed=true"
+      - "org.summitethic.ethical-clearance=approved"
+      - "org.summitethic.purpose=caching"
+      - "org.summitethic.resource-efficiency=high"
+      - "org.summitethic.data-classification=transient"
+
+  {% if redis_exporter_enabled | default(true) %}
+  redis-exporter:
+    image: oliver006/redis_exporter:{{ redis_exporter_version | default('latest') }}
+    container_name: summitethic-redis-exporter
+    restart: unless-stopped
+    command:
+      - --redis.addr=redis://redis:6379
+      {% if redis_password is defined and redis_password %}
+      - --redis.password={{ redis_password }}
+      {% endif %}
+      - --web.listen-address=:9121
+      - --web.telemetry-path=/metrics
+    depends_on:
+      - redis
+    ports:
+      - "127.0.0.1:9121:9121"
+    networks:
+      - redis-network
+      - monitoring_network
+    labels:
+      - "org.summitethic.service=redis-exporter"
+      - "org.summitethic.purpose=monitoring"
+      - "org.summitethic.component=redis-metrics"
+  {% endif %}
+
+networks:
+  redis-network:
+    driver: bridge
+  {% if redis_exporter_enabled | default(true) %}
+  monitoring_network:
+    external: true
+  {% endif %}

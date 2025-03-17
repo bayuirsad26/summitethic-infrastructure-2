@@ -1,0 +1,89 @@
+# {{ ansible_managed }}
+# SummitEthic Website Configuration for {{ website_name }}
+
+server {
+    listen 80;
+    server_name {{ website_name }} {{ 'www.' + website_name }};
+    
+    {% if website_https %}
+    # Redirect all HTTP traffic to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+    
+    # ACME challenge location for Let's Encrypt
+    location /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+    }
+    {% else %}
+    root {{ website_root }}/public;
+    index index.html index.php;
+    
+    # Main location block
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+    
+    {% include 'nginx-common-locations.j2' %}
+    {% endif %}
+    
+    # Access and error logs
+    access_log {{ website_root }}/logs/access.log;
+    error_log {{ website_root }}/logs/error.log;
+}
+
+{% if website_https %}
+server {
+    listen 443 ssl http2;
+    server_name {{ website_name }} {{ 'www.' + website_name }};
+    
+    root {{ website_root }}/public;
+    index index.html index.php;
+    
+    # SSL configuration
+    ssl_certificate /etc/letsencrypt/live/{{ website_name }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ website_name }}/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/{{ website_name }}/chain.pem;
+    
+    # SSL protocol settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256';
+    
+    # SSL session settings
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:50m;
+    ssl_session_tickets off;
+    
+    # OCSP Stapling
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    resolver 8.8.8.8 8.8.4.4 valid=300s;
+    resolver_timeout 5s;
+    
+    # Security headers
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Content-Security-Policy "{{ website_csp | default('default-src \'self\'; script-src \'self\' \'unsafe-inline\' \'unsafe-eval\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data:; font-src \'self\' data:; connect-src \'self\';') }}" always;
+    
+    # Main location block
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+    
+    {% include 'nginx-common-locations.j2' %}
+    
+    # Access and error logs
+    access_log {{ website_root }}/logs/access.log;
+    error_log {{ website_root }}/logs/error.log;
+}
+{% endif %}
+
+# Ethical considerations for website delivery:
+# - Privacy-respecting headers configured
+# - Secure TLS implementation
+# - Content Security Policy to prevent XSS
+# - No unnecessary data collection in logs

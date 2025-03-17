@@ -1,0 +1,96 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# SummitEthic System Backup Script
+# This script performs system configuration backup
+
+# Set error handling
+set -e
+set -o pipefail
+
+# Variables
+BACKUP_DATE=$(date +%Y-%m-%d)
+BACKUP_TIME=$(date +%H-%M-%S)
+BACKUP_DIR="{{ backup_base_dir }}/system"
+BACKUP_FILE="${BACKUP_DIR}/system-${BACKUP_DATE}_${BACKUP_TIME}.tar.gz"
+LOG_FILE="{{ backup_base_dir }}/logs/system-backup-${BACKUP_DATE}.log"
+HOSTNAME=$(hostname)
+
+# Ethical notice and metadata
+echo "# SummitEthic System Backup" > "${LOG_FILE}"
+echo "# Date: ${BACKUP_DATE}" >> "${LOG_FILE}"
+echo "# Host: ${HOSTNAME}" >> "${LOG_FILE}"
+echo "# Purpose: System configuration preservation for recovery purposes" >> "${LOG_FILE}"
+echo "# Retention: {{ backup_retention_days }} days" >> "${LOG_FILE}"
+echo "# Contains: System configuration files only, no user data" >> "${LOG_FILE}"
+echo "# --------------------------------------------------" >> "${LOG_FILE}"
+
+# Create temporary directory
+TEMP_DIR=$(mktemp -d)
+echo "Created temporary directory: ${TEMP_DIR}" >> "${LOG_FILE}"
+
+# Backup key system configuration files
+echo "Backing up system configuration files..." >> "${LOG_FILE}"
+
+# System configuration
+mkdir -p "${TEMP_DIR}/etc"
+cp -a /etc/fstab "${TEMP_DIR}/etc/" 2>> "${LOG_FILE}"
+cp -a /etc/hosts "${TEMP_DIR}/etc/" 2>> "${LOG_FILE}"
+cp -a /etc/hostname "${TEMP_DIR}/etc/" 2>> "${LOG_FILE}"
+cp -a /etc/network "${TEMP_DIR}/etc/" 2>> "${LOG_FILE}"
+cp -a /etc/netplan "${TEMP_DIR}/etc/" 2>> "${LOG_FILE}"
+
+# Service configuration
+mkdir -p "${TEMP_DIR}/services"
+cp -a /etc/systemd/system "${TEMP_DIR}/services/" 2>> "${LOG_FILE}"
+cp -a /etc/cron* "${TEMP_DIR}/services/" 2>> "${LOG_FILE}"
+cp -a /etc/logrotate.d "${TEMP_DIR}/services/" 2>> "${LOG_FILE}"
+
+# Security configuration
+mkdir -p "${TEMP_DIR}/security"
+cp -a /etc/ssh "${TEMP_DIR}/security/" 2>> "${LOG_FILE}"
+cp -a /etc/pam.d "${TEMP_DIR}/security/" 2>> "${LOG_FILE}"
+cp -a /etc/sudoers "${TEMP_DIR}/security/" 2>> "${LOG_FILE}"
+cp -a /etc/sudoers.d "${TEMP_DIR}/security/" 2>> "${LOG_FILE}"
+
+# SummitEthic configuration
+mkdir -p "${TEMP_DIR}/summitethic"
+cp -a /etc/summitethic "${TEMP_DIR}/summitethic/" 2>> "${LOG_FILE}"
+
+# Package information
+dpkg --get-selections > "${TEMP_DIR}/package_selections.txt" 2>> "${LOG_FILE}"
+apt-mark showmanual > "${TEMP_DIR}/manually_installed_packages.txt" 2>> "${LOG_FILE}"
+
+# Exclude sensitive information
+find "${TEMP_DIR}" -type f -name "*.conf" -o -name "*.yaml" -o -name "*.yml" | xargs -r grep -l "password\|secret\|key" | while read file; do
+    echo "WARNING: Potential sensitive information in ${file}" >> "${LOG_FILE}"
+    # Add protection notice
+    echo "# CONTAINS SENSITIVE INFORMATION - HANDLE SECURELY" > "${file}.sensitive"
+    # Move to separate location or handle according to policy
+done
+
+# Create the backup archive
+echo "Creating backup archive..." >> "${LOG_FILE}"
+tar -czf "${BACKUP_FILE}" -C "${TEMP_DIR}" . 2>> "${LOG_FILE}"
+
+# Encrypt the backup if encryption is enabled
+{% if backup_encryption_enabled | default(true) %}
+echo "Encrypting backup..." >> "${LOG_FILE}"
+gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase {{ backup_encryption_passphrase | default('changeme') }} "${BACKUP_FILE}" 2>> "${LOG_FILE}"
+mv "${BACKUP_FILE}.gpg" "${BACKUP_FILE}"
+{% endif %}
+
+# Calculate and store checksum
+echo "Calculating checksum..." >> "${LOG_FILE}"
+sha256sum "${BACKUP_FILE}" > "${BACKUP_FILE}.sha256" 2>> "${LOG_FILE}"
+
+# Clean up
+rm -rf "${TEMP_DIR}"
+
+# Backup metadata
+echo "Backup completed at $(date)" >> "${LOG_FILE}"
+echo "Backup file: ${BACKUP_FILE}" >> "${LOG_FILE}"
+echo "Backup size: $(du -h ${BACKUP_FILE} | cut -f1)" >> "${LOG_FILE}"
+
+# Log success
+echo "System backup completed successfully at $(date)" >> "${LOG_FILE}"
+exit 0

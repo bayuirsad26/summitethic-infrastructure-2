@@ -1,0 +1,112 @@
+---
+# Mailcow email server implementation for SummitEthic
+# Implements secure and privacy-respecting email service
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Check requirements
+  import_tasks: check_requirements.yml
+  tags: [prerequisites]
+
+- name: Create Mailcow directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ mailcow_user | default('summitethic') }}"
+    group: "{{ mailcow_group | default('summitethic') }}"
+    mode: 0750
+  with_items:
+    - "{{ mailcow_base_dir }}"
+    - "{{ mailcow_base_dir }}/data"
+    - "{{ mailcow_base_dir }}/data/conf"
+    - "{{ mailcow_base_dir }}/data/backup"
+    - "{{ mailcow_base_dir }}/data/assets/ssl"
+  tags: [directories]
+
+- name: Clone Mailcow repository
+  git:
+    repo: "{{ mailcow_git_repo }}"
+    dest: "{{ mailcow_base_dir }}"
+    version: "{{ mailcow_branch | default('master') }}"
+    accept_hostkey: yes
+  become: true
+  become_user: "{{ mailcow_user | default('summitethic') }}"
+  tags: [setup]
+
+- name: Configure Mailcow environment file
+  template:
+    src: mailcow.conf.j2
+    dest: "{{ mailcow_base_dir }}/mailcow.conf"
+    owner: "{{ mailcow_user | default('summitethic') }}"
+    group: "{{ mailcow_group | default('summitethic') }}"
+    mode: 0640
+  tags: [config]
+
+- name: Configure Mailcow SSL certificates
+  import_tasks: certificates.yml
+  when: mailcow_manage_certs | bool
+  tags: [certificates]
+
+- name: Configure Mailcow integration with other services
+  import_tasks: integration.yml
+  when: mailcow_integrations_enabled | bool
+  tags: [integration]
+
+- name: Configure Fail2ban for Mailcow
+  import_tasks: fail2ban.yml
+  when: mailcow_fail2ban_enabled | bool
+  tags: [fail2ban]
+
+- name: Configure Mailcow backups
+  import_tasks: backup.yml
+  when: mailcow_backups_enabled | bool
+  tags: [backup]
+
+- name: Configure Mailcow monitoring
+  import_tasks: monitoring.yml
+  when: mailcow_monitoring_enabled | bool
+  tags: [monitoring]
+
+- name: Create Mailcow docker-compose override
+  template:
+    src: docker-compose.override.yml.j2
+    dest: "{{ mailcow_base_dir }}/docker-compose.override.yml"
+    owner: "{{ mailcow_user | default('summitethic') }}"
+    group: "{{ mailcow_group | default('summitethic') }}"
+    mode: 0640
+  tags: [deploy]
+
+- name: Deploy Mailcow service
+  command: ./helper-scripts/docker-compose.sh up -d
+  args:
+    chdir: "{{ mailcow_base_dir }}"
+  become: true
+  become_user: "{{ mailcow_user | default('summitethic') }}"
+  tags: [deploy]
+
+- name: Verify Mailcow deployment
+  import_tasks: verify.yml
+  tags: [verify]
+
+- name: Configure log rotation for Mailcow
+  template:
+    src: mailcow-logrotate.j2
+    dest: /etc/logrotate.d/mailcow
+    owner: root
+    group: root
+    mode: 0644
+  tags: [logs]
+
+- name: Create ethical email policy documentation
+  template:
+    src: ethical-email-policy.md.j2
+    dest: "{{ mailcow_base_dir }}/ETHICAL_EMAIL_POLICY.md"
+    owner: "{{ mailcow_user | default('summitethic') }}"
+    group: "{{ mailcow_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics, documentation]

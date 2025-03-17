@@ -1,0 +1,362 @@
+---
+# SummitEthic Ethical Audit Playbook
+# This playbook performs regular ethical audits of the infrastructure
+
+- name: Perform infrastructure ethical audit
+  hosts: all
+  gather_facts: true
+  become: true
+  vars:
+    audit_date: "{{ lookup('pipe', 'date +%Y-%m-%d') }}"
+    audit_report_dir: "/var/log/summitethic/ethical_audits"
+
+  tasks:
+    - name: Create audit directory
+      file:
+        path: "{{ audit_report_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0750
+      delegate_to: localhost
+      run_once: true
+
+    - name: Gather infrastructure resource usage
+      shell: |
+        echo "CPU Usage:" > /tmp/resource_audit.txt
+        mpstat 1 5 | grep -A 5 "%idle" >> /tmp/resource_audit.txt
+        echo "\nMemory Usage:" >> /tmp/resource_audit.txt
+        free -h >> /tmp/resource_audit.txt
+        echo "\nDisk Usage:" >> /tmp/resource_audit.txt
+        df -h >> /tmp/resource_audit.txt
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Gather service fairness metrics
+      shell: |
+        echo "Service CPU Usage:" > /tmp/service_audit.txt
+        ps -eo pcpu,pmem,pid,user,args | sort -k 1 -r | head -15 >> /tmp/service_audit.txt
+        echo "\nResource Allocation:" >> /tmp/service_audit.txt
+        if command -v docker &> /dev/null; then
+          docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" >> /tmp/service_audit.txt
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+      ignore_errors: true
+
+    - name: Check for unusual access patterns
+      shell: |
+        echo "Last 20 SSH logins:" > /tmp/access_audit.txt
+        last -n 20 >> /tmp/access_audit.txt
+        echo "\nFailed login attempts:" >> /tmp/access_audit.txt
+        grep "Failed password" /var/log/auth.log | tail -n 20 >> /tmp/access_audit.txt
+      args:
+        executable: /bin/bash
+      changed_when: false
+      ignore_errors: true
+
+    - name: Check for compliance with data privacy principles
+      shell: |
+        echo "Sensitive directories permissions:" > /tmp/privacy_audit.txt
+        ls -la /etc/summitethic/secrets >> /tmp/privacy_audit.txt
+        echo "\nDatabase backup files:" >> /tmp/privacy_audit.txt
+        find /var/backups -name "*.sql" -o -name "*.dump" -type f -mtime -7 -ls >> /tmp/privacy_audit.txt
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Combine audit reports
+      shell: |
+        mkdir -p /tmp/ethical_audit
+        cat /tmp/resource_audit.txt > /tmp/ethical_audit/{{ inventory_hostname }}_audit.txt
+        echo "\n=== SERVICE FAIRNESS AUDIT ===\n" >> /tmp/ethical_audit/{{ inventory_hostname }}_audit.txt
+        cat /tmp/service_audit.txt >> /tmp/ethical_audit/{{ inventory_hostname }}_audit.txt
+        echo "\n=== ACCESS PATTERN AUDIT ===\n" >> /tmp/ethical_audit/{{ inventory_hostname }}_audit.txt
+        cat /tmp/access_audit.txt >> /tmp/ethical_audit/{{ inventory_hostname }}_audit.txt
+        echo "\n=== PRIVACY COMPLIANCE AUDIT ===\n" >> /tmp/ethical_audit/{{ inventory_hostname }}_audit.txt
+        cat /tmp/privacy_audit.txt >> /tmp/ethical_audit/{{ inventory_hostname }}_audit.txt
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Fetch audit reports
+      fetch:
+        src: /tmp/ethical_audit/{{ inventory_hostname }}_audit.txt
+        dest: "{{ audit_report_dir }}/{{ audit_date }}/{{ inventory_hostname }}_audit.txt"
+        flat: yes
+
+    - name: Generate ethical impact summary
+      shell: |
+        cat << EOF > /tmp/ethical_summary.md
+        # SummitEthic Infrastructure Ethical Audit
+
+        Date: {{ audit_date }}
+        Host: {{ inventory_hostname }}
+        Environment: {{ env | default('production') }}
+
+        ## Resource Fairness Assessment
+
+        - CPU usage distribution appears to be ${if $(grep -q "^[0-9]\{1,2\}\.[0-9]" /tmp/resource_audit.txt) && $(awk '{if(NR==2) print $1}' /tmp/resource_audit.txt) > 80; then echo "**CONCERNING**"; else echo "reasonable"; fi}
+        - Memory allocation is ${if $(grep -q "^Mem:" /tmp/resource_audit.txt) && $(awk '/^Mem:/ {print $3/$2*100}' /tmp/resource_audit.txt) > 90; then echo "**CONCERNING**"; else echo "appropriate"; fi}
+        - Disk usage appears to be ${if $(grep -q "^/dev" /tmp/resource_audit.txt) && $(awk '/^\/dev/ && $5 ~ /%/ {gsub(/%/,"",$5); if ($5 > 85) exit 1}' /tmp/resource_audit.txt); then echo "**CONCERNING**"; else echo "within acceptable limits"; fi}
+
+        ## Transparency Check
+
+        - Logging is properly configured: ${if [ -d "/var/log/summitethic" ]; then echo "Yes"; else echo "**No**"; fi}
+        - Audit trails are maintained: ${if [ -f "/var/log/audit/audit.log" ]; then echo "Yes"; else echo "**No**"; fi}
+
+        ## Data Privacy Assessment
+
+        - Sensitive data is properly secured: ${if grep -q "drwx------" /tmp/privacy_audit.txt; then echo "Yes"; else echo "**NEEDS REVIEW**"; fi}
+        - Data backup encryption: ${if grep -q "\.enc\." /tmp/privacy_audit.txt; then echo "Enabled"; else echo "**NOT VERIFIED**"; fi}
+
+        ## Recommendations
+
+        1. ${if $(awk '/^Mem:/ {print $3/$2*100}' /tmp/resource_audit.txt) > 80; then echo "Review memory allocation for better resource distribution"; else echo "Continue monitoring resource usage trends"; fi}
+        2. ${if grep -q "Failed password" /tmp/access_audit.txt; then echo "Review security controls for unauthorized access attempts"; else echo "Maintain current access control policies"; fi}
+        3. Regular ethical reviews should be scheduled monthly
+
+        ## Conclusion
+
+        This infrastructure ${if $(awk '/^Mem:/ {print $3/$2*100}' /tmp/resource_audit.txt) > 90 || $(grep -q "drwxrwxrwx" /tmp/privacy_audit.txt); then echo "requires immediate attention for ethical compliance"; else echo "generally adheres to SummitEthic's ethical principles with minor improvements suggested"; fi}.
+
+        EOF
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Fetch ethical impact summary
+      fetch:
+        src: /tmp/ethical_summary.md
+        dest: "{{ audit_report_dir }}/{{ audit_date }}/{{ inventory_hostname }}_summary.md"
+        flat: yes
+
+    - name: Cleanup temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /tmp/resource_audit.txt
+        - /tmp/service_audit.txt
+        - /tmp/access_audit.txt
+        - /tmp/privacy_audit.txt
+        - /tmp/ethical_audit
+        - /tmp/ethical_summary.md
+      changed_when: false
+
+    - name: Compile consolidated report
+      local_action:
+        module: shell
+        cmd: |
+          echo "# SummitEthic Infrastructure Ethical Audit - {{ audit_date }}" > {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+          echo "" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+          echo "## Overview" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+          echo "" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+          echo "This audit was performed on {{ lookup('pipe', 'date') }} across {{ groups['all'] | length }} systems." >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+          echo "" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+
+          echo "## System Summaries" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+          echo "" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+
+          for file in {{ audit_report_dir }}/{{ audit_date }}/*_summary.md; do
+            echo "### $(basename $file _summary.md)" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+            grep -A 10 "## Conclusion" $file | grep -v "## Conclusion" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+            echo "" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+          done
+
+          echo "## Recommendations" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+          echo "" >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+          grep -h "^[0-9]\." {{ audit_report_dir }}/{{ audit_date }}/*_summary.md | sort | uniq >> {{ audit_report_dir }}/{{ audit_date }}/consolidated_report.md
+      run_once: true
+
+    - name: Notify about audit completion
+      debug:
+        msg: "Ethical infrastructure audit completed. Reports available in {{ audit_report_dir }}/{{ audit_date }}/"
+      run_once: true
+
+# SummitEthic Ethical Audit Playbook
+# This playbook performs ethical assessments of the infrastructure
+
+- name: Perform ethical infrastructure audit
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    ethical_audit_date: "{{ lookup('pipe', 'date +%Y-%m-%d') }}"
+    ethical_report_dir: "/var/log/summitethic/ethical_audits"
+    ethical_report_file: "{{ ethical_report_dir }}/{{ ethical_audit_date }}/{{ inventory_hostname }}_ethical_audit.json"
+
+  pre_tasks:
+    - name: Create ethical audit directory
+      file:
+        path: "{{ ethical_report_dir }}/{{ ethical_audit_date }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0750
+      delegate_to: localhost
+      run_once: true
+
+    - name: Display ethical audit message
+      debug:
+        msg:
+          - "SummitEthic Ethical Infrastructure Audit - {{ ethical_audit_date }}"
+          - "This audit assesses infrastructure against ethical principles"
+          - "Including privacy, resource fairness, security, and sustainability"
+      tags: [always]
+
+  tasks:
+    - name: Audit resource usage
+      block:
+        - name: Check CPU usage
+          shell: "top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}'"
+          register: cpu_usage
+          changed_when: false
+
+        - name: Check memory usage
+          shell: "free | grep Mem | awk '{print $3/$2 * 100.0}'"
+          register: memory_usage
+          changed_when: false
+
+        - name: Check disk usage
+          shell: "df -h / | tail -n1 | awk '{print $5}' | sed 's/%//'"
+          register: disk_usage
+          changed_when: false
+
+        - name: Record resource usage metrics
+          set_fact:
+            resource_metrics:
+              cpu_usage: "{{ cpu_usage.stdout | float | round(1) }}"
+              memory_usage: "{{ memory_usage.stdout | float | round(1) }}"
+              disk_usage: "{{ disk_usage.stdout | float }}"
+              timestamp: "{{ ansible_date_time.iso8601 }}"
+      tags: [resources]
+
+    - name: Audit privacy practices
+      block:
+        - name: Check for unencrypted sensitive files
+          find:
+            paths: ["/etc/summitethic", "/opt/summitethic"]
+            patterns: "*.conf,*.json,*.yml,*.yaml"
+            recurse: yes
+          register: config_files
+
+        - name: Check files for plaintext secrets
+          shell: "grep -l 'password\\|secret\\|token\\|key' {{ item.path }} || true"
+          with_items: "{{ config_files.files }}"
+          register: sensitive_content_check
+          changed_when: false
+          no_log: true
+
+        - name: Record privacy assessment
+          set_fact:
+            privacy_assessment:
+              unencrypted_secrets_found: "{{ sensitive_content_check.results | selectattr('stdout', 'defined') | selectattr('stdout', 'ne', '') | list | length > 0 }}"
+              potential_issues: "{{ sensitive_content_check.results | selectattr('stdout', 'defined') | selectattr('stdout', 'ne', '') | map(attribute='item.path') | list }}"
+              timestamp: "{{ ansible_date_time.iso8601 }}"
+      tags: [privacy]
+
+    - name: Audit data handling
+      block:
+        - name: Check for data retention policies
+          find:
+            paths: ["/etc/summitethic", "/opt/summitethic"]
+            patterns: "*retention*,*policy*"
+            recurse: yes
+          register: policy_files
+
+        - name: Check log rotation configuration
+          shell: "find /etc/logrotate.d -type f -exec cat {} \\; | grep -c 'rotate'"
+          register: log_rotation_config
+          changed_when: false
+
+        - name: Record data handling assessment
+          set_fact:
+            data_handling_assessment:
+              retention_policies_found: "{{ policy_files.matched > 0 }}"
+              log_rotation_configured: "{{ log_rotation_config.stdout | int > 0 }}"
+              timestamp: "{{ ansible_date_time.iso8601 }}"
+      tags: [data]
+
+    - name: Audit security practices
+      block:
+        - name: Check SSH configuration
+          stat:
+            path: /etc/ssh/sshd_config
+          register: sshd_config
+
+        - name: Analyze SSH configuration if exists
+          shell: "grep -E 'PermitRootLogin|PasswordAuthentication|Protocol' /etc/ssh/sshd_config | grep -v '^#'"
+          register: ssh_settings
+          changed_when: false
+          when: sshd_config.stat.exists
+
+        - name: Check firewall status
+          shell: "ufw status | grep -c 'Status: active' || true"
+          register: firewall_active
+          changed_when: false
+
+        - name: Record security assessment
+          set_fact:
+            security_assessment:
+              ssh_root_login_disabled: "{{ 'PermitRootLogin no' in ssh_settings.stdout }}"
+              ssh_password_auth_disabled: "{{ 'PasswordAuthentication no' in ssh_settings.stdout }}"
+              firewall_enabled: "{{ firewall_active.stdout | int > 0 }}"
+              timestamp: "{{ ansible_date_time.iso8601 }}"
+          when: sshd_config.stat.exists
+      tags: [security]
+
+    - name: Combine audit results
+      set_fact:
+        ethical_audit_results:
+          hostname: "{{ inventory_hostname }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          resource_metrics: "{{ resource_metrics | default({}) }}"
+          privacy_assessment: "{{ privacy_assessment | default({}) }}"
+          data_handling_assessment: "{{ data_handling_assessment | default({}) }}"
+          security_assessment: "{{ security_assessment | default({}) }}"
+
+    - name: Save audit results
+      copy:
+        content: "{{ ethical_audit_results | to_nice_json }}"
+        dest: "{{ ethical_report_dir }}/{{ ethical_audit_date }}/{{ inventory_hostname }}_ethical_audit.json"
+        mode: 0640
+      delegate_to: localhost
+
+    - name: Calculate ethical score
+      set_fact:
+        ethical_score: >-
+          {% set score = 100 %}
+          {% if resource_metrics.cpu_usage|default(0) > 80 %}{% set score = score - 10 %}{% endif %}
+          {% if resource_metrics.memory_usage|default(0) > 80 %}{% set score = score - 10 %}{% endif %}
+          {% if resource_metrics.disk_usage|default(0) > 80 %}{% set score = score - 10 %}{% endif %}
+          {% if privacy_assessment.unencrypted_secrets_found|default(false) %}{% set score = score - 20 %}{% endif %}
+          {% if not data_handling_assessment.retention_policies_found|default(true) %}{% set score = score - 15 %}{% endif %}
+          {% if not data_handling_assessment.log_rotation_configured|default(true) %}{% set score = score - 5 %}{% endif %}
+          {% if not security_assessment.ssh_root_login_disabled|default(true) %}{% set score = score - 15 %}{% endif %}
+          {% if not security_assessment.ssh_password_auth_disabled|default(true) %}{% set score = score - 10 %}{% endif %}
+          {% if not security_assessment.firewall_enabled|default(true) %}{% set score = score - 15 %}{% endif %}
+          {{ score }}
+
+    - name: Display ethical score
+      debug:
+        msg:
+          - "Ethical Assessment Score for {{ inventory_hostname }}: {{ ethical_score }}/100"
+          - "{% if ethical_score >= 90 %}Excellent ethical practices!{% elif ethical_score >= 70 %}Good ethical practices, with room for improvement{% else %}Significant ethical concerns require attention{% endif %}"
+
+  post_tasks:
+    - name: Create consolidated ethical report
+      template:
+        src: ethical-report.md.j2
+        dest: "{{ ethical_report_dir }}/{{ ethical_audit_date }}/consolidated_report.md"
+      vars:
+        hosts_data: "{{ hostvars }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Ethical audit completed
+      debug:
+        msg: "Ethical infrastructure audit completed. Report available at {{ ethical_report_dir }}/{{ ethical_audit_date }}/"
+      run_once: true

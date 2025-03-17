@@ -1,0 +1,50 @@
+---
+# Encrypted credentials and secrets for production environment
+# To edit: ansible-vault edit ansible/inventories/production/group_vars/all/vault.yml
+
+# Database credentials
+vault_db_user: summitethic_prod
+vault_db_password: "Sup3rS3cur3P@ssw0rd!2023"
+
+# API keys and tokens
+vault_api_keys:
+  mailgun: "key-8a6f2d9b3c4e5f7a8b9c0d1e2f3g4h5i"
+  stripe: "sk_live_12345abcdefghijklmnopqrstuvwxyz"
+  aws: "AKIAIOSFODNN7EXAMPLE/wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+# SSL certificates passphrase
+vault_ssl_passphrase: "C3rt1f1c@t3P@ssw0rd!"
+
+# Monitoring credentials
+vault_prometheus_basic_auth:
+  username: prometheus_admin
+  password: "M0n1t0r1ngS3cur3!"
+
+# Service accounts
+vault_service_accounts:
+  deployment:
+    username: deploy_user
+    password: "D3pl0ym3ntU$3r!"
+  backup:
+    username: backup_service
+    password: "B@ckupS3rv1c3!"
+
+# JWT signing keys
+vault_jwt_signing_key: |
+  -----BEGIN PRIVATE KEY-----
+  MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC8dLjOZRBvuXmU
+  hXWOGZ2ZJD4yx5nH3AYRMzyhZ6OIU9K5exmpg/MvPfXrJPnbAJiRvmPY6wUQnJe5
+  YOV0...
+  -----END PRIVATE KEY-----
+
+# Secret rotation schedule metadata
+vault_secret_rotation:
+  db_credentials:
+    last_rotated: "2025-01-15"
+    rotation_interval_days: 90
+  api_keys:
+    last_rotated: "2025-02-01"
+    rotation_interval_days: 60
+  service_accounts:
+    last_rotated: "2025-01-30"
+    rotation_interval_days: 45

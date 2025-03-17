@@ -1,0 +1,84 @@
+---
+# Security role default variables
+
+# Security level (low, medium, high, maximum)
+security_level: "high"
+
+# Should compliance checks be run
+security_compliance_check: true
+security_compliance_standards:
+  - cis
+  - nist
+
+# SSH configuration
+ssh_port: 22
+ssh_permit_root_login: "no"
+ssh_password_authentication: false
+ssh_authentication_methods: "publickey"
+ssh_allow_groups:
+  - sudo
+  - admin
+  - summitethic
+ssh_max_auth_tries: 3
+ssh_max_sessions: 4
+ssh_login_grace_time: "1m"
+ssh_x11_forwarding: false
+ssh_tcp_keep_alive: true
+ssh_log_level: "VERBOSE"
+ssh_client_alive_interval: 300
+ssh_client_alive_count_max: 3
+ssh_chroot_directory: ""
+ssh_allow_agent_forwarding: false
+ssh_allow_tcp_forwarding: false
+
+# SSH Crypto settings - secure defaults for high security
+ssh_kex_algorithms:
+  - curve25519-sha256
+  - curve25519-sha256@libssh.org
+  - diffie-hellman-group16-sha512
+  - diffie-hellman-group18-sha512
+ssh_ciphers:
+  - chacha20-poly1305@openssh.com
+  - aes256-gcm@openssh.com
+  - aes128-gcm@openssh.com
+  - aes256-ctr
+  - aes192-ctr
+  - aes128-ctr
+ssh_macs:
+  - hmac-sha2-512-etm@openssh.com
+  - hmac-sha2-256-etm@openssh.com
+  - hmac-sha2-512
+  - hmac-sha2-256
+
+# Firewall configuration
+firewall_default_incoming_policy: "drop"
+firewall_default_outgoing_policy: "allow"
+firewall_logging: "on"
+firewall_allowed_ports:
+  - { port: "{{ ssh_port }}", proto: "tcp" }
+  - { port: "80", proto: "tcp" }
+  - { port: "443", proto: "tcp" }
+firewall_use_custom_rules: false
+
+# User account policies
+account_min_password_length: 14
+account_max_password_age: 90
+account_password_min_days: 1
+account_password_warn_age: 7
+account_password_inactive_days: 30
+account_lockout_attempts: 5
+account_remember_password: 5
+account_password_complexity: true
+
+# Audit configuration
+audit_enabled: true
+audit_remote_server: ""
+audit_rules_enabled: true
+audit_backlog_limit: 8192
+
+# AIDE configuration
+aide_enabled: true
+aide_cron_hour: 5
+aide_cron_minute: 0
+aide_email: "security@summitethic.com"
+aide_db_path: "/var/lib/aide/aide.db"

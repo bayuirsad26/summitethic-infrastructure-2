@@ -1,0 +1,215 @@
+---
+# SummitEthic Security Playbook
+# Includes secret management, security auditing, and compliance checks
+
+- name: Apply security policies and manage secrets
+  hosts: all
+  become: true
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/all/security.yml"
+
+  pre_tasks:
+    - name: Check if vault files are encrypted
+      local_action: shell grep -L "\$ANSIBLE_VAULT" {{ inventory_dir }}/group_vars/*/vault.yml || true
+      register: unencrypted_vault_files
+      changed_when: false
+      check_mode: no
+      failed_when: unencrypted_vault_files.stdout != ""
+
+    - name: Fail if unencrypted vault files found
+      fail:
+        msg: "Unencrypted vault files found: {{ unencrypted_vault_files.stdout_lines | join(', ') }}"
+      when: unencrypted_vault_files.stdout != ""
+
+  tasks:
+    - name: Check for secrets in git history
+      local_action: command git grep -l "password\|token\|secret\|key" -- ":(exclude)*.vault.yml" ":(exclude)*.enc.*"
+      register: git_secrets
+      changed_when: false
+      check_mode: no
+      failed_when: git_secrets.rc != 0 and git_secrets.rc != 1
+
+    - name: Show warning if potential secrets in git history
+      debug:
+        msg: "WARNING: Potential secrets found in git history! Please review and clean."
+      when: git_secrets.stdout != ""
+
+    - name: Create secure directories for secrets
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0700
+      with_items:
+        - /etc/summitethic/secrets
+        - /etc/summitethic/certs
+
+    - name: Deploy root CA certificate
+      copy:
+        src: files/ca/summit_root_ca.crt
+        dest: /etc/summitethic/certs/root_ca.crt
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Deploy encrypted secrets
+      copy:
+        content: "{{ lookup('file', lookup('env', 'HOME') + '/.summitethic/secrets/' + item + '.enc') | b64decode }}"
+        dest: "/etc/summitethic/secrets/{{ item }}"
+        owner: root
+        group: root
+        mode: 0600
+      with_items: "{{ service_secrets[ansible_hostname] | default([]) }}"
+      when: service_secrets is defined
+      no_log: true
+
+# SummitEthic Security Audit and Hardening Playbook
+# This playbook performs comprehensive security checks and hardening
+
+- name: Perform security audit and hardening
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    security_audit_only: "{{ audit_only | default(false) }}"
+    security_report_dir: "/var/log/summitethic/security"
+    security_audit_date: "{{ lookup('pipe', 'date +%Y-%m-%d') }}"
+
+  pre_tasks:
+    - name: Create security audit directory
+      file:
+        path: "{{ security_report_dir }}/{{ security_audit_date }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0750
+      delegate_to: localhost
+      run_once: true
+
+    - name: Display security notice
+      debug:
+        msg:
+          - "SummitEthic Security Audit - {{ security_audit_date }}"
+          - "Mode: {{ 'Audit Only' if security_audit_only else 'Audit and Harden' }}"
+          - "Security Level: {{ security_level | default('high') | upper }}"
+          - "Ethical Considerations: Security changes respect user privacy and system integrity"
+      tags: [always]
+
+  roles:
+    - role: core/security
+      vars:
+        security_audit_only: "{{ security_audit_only }}"
+        security_level: "{{ security_level | default('high') }}"
+      tags: [security]
+
+  tasks:
+    - name: Check for rootkits and malware
+      command: rkhunter --check --skip-keypress
+      register: rkhunter_result
+      changed_when: false
+      failed_when: false
+      tags: [malware]
+
+    - name: Record rootkit scan results
+      copy:
+        content: "{{ rkhunter_result.stdout }}\n{{ rkhunter_result.stderr }}"
+        dest: "{{ security_report_dir }}/{{ security_audit_date }}/{{ inventory_hostname }}_rkhunter.log"
+        mode: 0640
+      delegate_to: localhost
+      tags: [malware]
+
+    - name: Check for outdated packages
+      command: apt list --upgradable
+      register: outdated_packages
+      changed_when: false
+      failed_when: false
+      when: ansible_os_family == "Debian"
+      tags: [packages]
+
+    - name: Record outdated packages
+      copy:
+        content: "{{ outdated_packages.stdout }}\n{{ outdated_packages.stderr }}"
+        dest: "{{ security_report_dir }}/{{ security_audit_date }}/{{ inventory_hostname }}_outdated_packages.log"
+        mode: 0640
+      delegate_to: localhost
+      when: ansible_os_family == "Debian"
+      tags: [packages]
+
+    - name: Check for open ports
+      command: ss -tuln
+      register: open_ports
+      changed_when: false
+      tags: [network]
+
+    - name: Record open ports
+      copy:
+        content: "{{ open_ports.stdout }}"
+        dest: "{{ security_report_dir }}/{{ security_audit_date }}/{{ inventory_hostname }}_open_ports.log"
+        mode: 0640
+      delegate_to: localhost
+      tags: [network]
+
+    - name: Check for weak SSH configuration
+      security_check:
+        target: /etc/ssh/sshd_config
+        scan_type: config
+        ethical_level: "{{ security_level | default('high') }}"
+      register: ssh_security
+      tags: [ssh]
+
+    - name: Record SSH security results
+      copy:
+        content: "{{ ssh_security | to_nice_json }}"
+        dest: "{{ security_report_dir }}/{{ security_audit_date }}/{{ inventory_hostname }}_ssh_security.json"
+        mode: 0640
+      delegate_to: localhost
+      tags: [ssh]
+
+    - name: Check for compromised accounts
+      command: grep "Failed password" /var/log/auth.log | tail -n 100
+      register: failed_logins
+      changed_when: false
+      failed_when: false
+      tags: [accounts]
+
+    - name: Record failed login attempts
+      copy:
+        content: "{{ failed_logins.stdout }}"
+        dest: "{{ security_report_dir }}/{{ security_audit_date }}/{{ inventory_hostname }}_failed_logins.log"
+        mode: 0640
+      delegate_to: localhost
+      tags: [accounts]
+
+    - name: Generate consolidated security report
+      template:
+        src: security-report.md.j2
+        dest: "{{ security_report_dir }}/{{ security_audit_date }}/{{ inventory_hostname }}_security_report.md"
+      vars:
+        ssh_score: "{{ ssh_security.score }}"
+        ssh_issues: "{{ ssh_security.issues }}"
+        ethical_assessment: "{{ ssh_security.ethical_assessment }}"
+      delegate_to: localhost
+      tags: [report]
+
+    - name: Apply security hardening
+      include_role:
+        name: core/security
+        tasks_from: hardening.yml
+      when: not security_audit_only
+      tags: [hardening]
+
+  post_tasks:
+    - name: Create consolidated report
+      local_action:
+        module: template
+        src: consolidated-security-report.md.j2
+        dest: "{{ security_report_dir }}/{{ security_audit_date }}/consolidated_report.md"
+        mode: 0640
+      run_once: true
+      tags: [report]
+
+    - name: Security audit completed
+      debug:
+        msg: "Security audit completed. Reports available in {{ security_report_dir }}/{{ security_audit_date }}/"
+      tags: [always]

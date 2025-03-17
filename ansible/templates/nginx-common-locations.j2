@@ -1,0 +1,65 @@
+# Common location blocks for Nginx configuration
+
+# PHP handler
+location ~ \.php$ {
+    try_files $uri =404;
+    fastcgi_pass unix:/var/run/php/php{{ php_version | default('8.1') }}-fpm.sock;
+    fastcgi_index index.php;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    include fastcgi_params;
+    
+    # Security headers for PHP files
+    add_header X-Content-Type-Options "nosniff" always;
+    
+    # Ethical considerations for PHP execution
+    fastcgi_param PHP_VALUE "max_execution_time=30;memory_limit=128M;post_max_size=16M;upload_max_filesize=8M;";
+}
+
+# Deny access to hidden files
+location ~ /\. {
+    deny all;
+    access_log off;
+    log_not_found off;
+}
+
+# Deny access to configuration files
+location ~ \.(yml|yaml|conf|config|ini|sql|log|env)$ {
+    deny all;
+    access_log off;
+    log_not_found off;
+}
+
+# Static assets with cache headers
+location ~* \.(js|css|png|jpg|jpeg|gif|webp|ico|svg|woff|woff2|ttf|eot)$ {
+    expires {{ static_assets_cache_time | default('30d') }};
+    add_header Cache-Control "public, no-transform";
+    add_header X-Content-Type-Options "nosniff" always;
+    
+    # Set appropriate content types
+    include mime.types;
+    default_type application/octet-stream;
+    
+    # Enable compression
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+}
+
+# Health check endpoint for monitoring
+location = /health {
+    access_log off;
+    return 200 "OK";
+}
+
+# Set robots.txt based on environment
+location = /robots.txt {
+    {% if env | default('production') != 'production' %}
+    # Prevent indexing on non-production environments
+    return 200 "User-agent: *\nDisallow: /";
+    {% else %}
+    # Use the physical file in production
+    try_files $uri $uri/ =404;
+    {% endif %}
+}

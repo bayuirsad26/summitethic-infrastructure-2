@@ -1,0 +1,64 @@
+# {{ ansible_managed }}
+# SummitEthic MinIO Object Storage Configuration
+
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:{{ minio_version }}
+    container_name: minio
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+      {% if minio_enable_tls | bool %}
+      - ./certs:/certs
+      {% endif %}
+      - ./config:/root/.minio
+    ports:
+      - "{{ minio_api_port }}:9000"
+      - "{{ minio_console_port }}:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      {% if minio_enable_tls | bool %}
+      - MINIO_CERT_FILE=/certs/public.crt
+      - MINIO_KEY_FILE=/certs/private.key
+      {% endif %}
+      - MINIO_PROMETHEUS_AUTH_TYPE=public
+      - MINIO_BROWSER_REDIRECT_URL=https://{{ minio_domain | default('minio.' + domain) }}
+      - MINIO_DOMAIN={{ minio_domain | default('minio.' + domain) }}
+    env_file:
+      - ./config/minio.env
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - minio_network
+    labels:
+      # Ethical labels to document purpose and security status
+      - "org.summitethic.service=object-storage"
+      - "org.summitethic.security-reviewed=true"
+      - "org.summitethic.ethical-clearance=approved"
+      - "org.summitethic.data-classification=managed"
+      - "org.summitethic.compliance=gdpr,hipaa"
+      - "traefik.enable=true"
+      - "traefik.http.routers.minio-api.rule=Host(`{{ minio_domain | default('minio.' + domain) }}`)"
+      - "traefik.http.routers.minio-api.entrypoints=websecure"
+      - "traefik.http.routers.minio-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.minio-api.service=minio-api"
+      - "traefik.http.services.minio-api.loadbalancer.server.port=9000"
+      - "traefik.http.routers.minio-console.rule=Host(`{{ minio_console_domain | default('minio-console.' + domain) }}`)"
+      - "traefik.http.routers.minio-console.entrypoints=websecure"
+      - "traefik.http.routers.minio-console.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.minio-console.service=minio-console"
+      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
+      - "traefik.http.routers.minio-api.middlewares=secHeaders@file"
+      - "traefik.http.routers.minio-console.middlewares=secHeaders@file"
+
+networks:
+  minio_network:
+    driver: bridge

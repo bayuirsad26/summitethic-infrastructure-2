@@ -1,0 +1,50 @@
+---
+# Configures UFW firewall with secure defaults
+
+- name: Install UFW
+  package:
+    name: ufw
+    state: present
+  register: ufw_install
+  until: ufw_install is success
+  retries: 3
+  delay: 5
+
+- name: Configure UFW defaults
+  ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  with_items:
+    - {
+        direction: "incoming",
+        policy: "{{ firewall_default_incoming_policy }}",
+      }
+    - {
+        direction: "outgoing",
+        policy: "{{ firewall_default_outgoing_policy }}",
+      }
+  notify: enable_ufw
+
+- name: Configure UFW logging
+  ufw:
+    logging: "{{ firewall_logging }}"
+  notify: enable_ufw
+
+- name: Configure allowed ports
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    from_ip: "{{ item.from | default(omit) }}"
+  with_items: "{{ firewall_allowed_ports }}"
+  notify: enable_ufw
+
+- name: Add custom IPTables rules for additional security
+  template:
+    src: iptables-custom.rules.j2
+    dest: /etc/iptables/rules.v4
+    owner: root
+    group: root
+    mode: 0640
+  notify: reload_iptables
+  when: security_level == 'maximum' and firewall_use_custom_rules | bool

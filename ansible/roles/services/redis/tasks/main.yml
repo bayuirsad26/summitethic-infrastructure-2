@@ -1,0 +1,87 @@
+---
+# Redis cache implementation for SummitEthic
+# Implements secure and optimized Redis caching service
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Check if deployment type is valid
+  assert:
+    that: redis_deployment_type in ['standalone', 'cluster', 'sentinel']
+    msg: "Redis deployment type must be one of: standalone, cluster, sentinel"
+  tags: [verify]
+
+- name: Determine Redis configuration tasks
+  include_tasks: "{{ redis_deployment_type }}.yml"
+  tags: [config, deploy]
+
+- name: Create Redis directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ redis_user | default('summitethic') }}"
+    group: "{{ redis_group | default('summitethic') }}"
+    mode: 0750
+  with_items:
+    - "{{ redis_base_dir }}"
+    - "{{ redis_base_dir }}/data"
+    - "{{ redis_base_dir }}/config"
+    - "{{ redis_base_dir }}/logs"
+  tags: [directories]
+
+- name: Generate Redis password
+  set_fact:
+    redis_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=32') }}"
+  when: redis_generate_password | bool and redis_password is not defined
+  no_log: true
+  tags: [security]
+
+- name: Configure Redis security
+  include_tasks: secure.yml
+  when: redis_security_enabled | bool
+  tags: [security]
+
+- name: Create Redis configuration
+  template:
+    src: "{{ redis_config_template }}"
+    dest: "{{ redis_base_dir }}/config/redis.conf"
+    owner: "{{ redis_user | default('summitethic') }}"
+    group: "{{ redis_group | default('summitethic') }}"
+    mode: 0640
+  notify: restart_redis
+  tags: [config]
+
+- name: Create Redis docker-compose file
+  template:
+    src: redis-docker-compose.yml.j2
+    dest: "{{ redis_base_dir }}/docker-compose.yml"
+    owner: "{{ redis_user | default('summitethic') }}"
+    group: "{{ redis_group | default('summitethic') }}"
+    mode: 0640
+  tags: [deploy]
+
+- name: Deploy Redis service
+  docker_compose:
+    project_src: "{{ redis_base_dir }}"
+    state: present
+  become: true
+  become_user: "{{ redis_user | default('summitethic') }}"
+  tags: [deploy]
+
+- name: Configure Redis monitoring
+  include_tasks: monitoring.yml
+  when: redis_monitoring_enabled | bool
+  tags: [monitoring]
+
+- name: Document ethical caching policy
+  template:
+    src: ethical-caching.md.j2
+    dest: "{{ redis_base_dir }}/ETHICAL_CACHING.md"
+    owner: "{{ redis_user | default('summitethic') }}"
+    group: "{{ redis_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics, documentation]

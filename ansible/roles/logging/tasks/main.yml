@@ -1,0 +1,116 @@
+---
+# Logging stack implementation for SummitEthic
+# Implements centralized logging with ELK stack
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Check prerequisites
+  import_tasks: prerequisites.yml
+  tags: [prerequisites]
+
+- name: Create logging directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0750
+  with_items:
+    - "{{ logging_base_dir }}"
+    - "{{ logging_base_dir }}/elasticsearch"
+    - "{{ logging_base_dir }}/elasticsearch/data"
+    - "{{ logging_base_dir }}/elasticsearch/config"
+    - "{{ logging_base_dir }}/logstash"
+    - "{{ logging_base_dir }}/logstash/config"
+    - "{{ logging_base_dir }}/logstash/pipeline"
+    - "{{ logging_base_dir }}/kibana"
+    - "{{ logging_base_dir }}/kibana/config"
+    - "{{ logging_base_dir }}/filebeat"
+    - "{{ logging_base_dir }}/filebeat/config"
+    - "{{ logging_base_dir }}/filebeat/modules"
+  tags: [config]
+
+- name: Configure Elasticsearch
+  import_tasks: elasticsearch.yml
+  tags: [elasticsearch]
+
+- name: Configure Logstash
+  import_tasks: logstash.yml
+  tags: [logstash]
+
+- name: Configure Kibana
+  import_tasks: kibana.yml
+  tags: [kibana]
+
+- name: Configure Filebeat
+  import_tasks: filebeat.yml
+  tags: [filebeat]
+
+- name: Configure security
+  import_tasks: security.yml
+  when: logging_security_enabled | bool
+  tags: [security]
+
+- name: Create ELK docker-compose file
+  template:
+    src: docker-compose.logging.yml.j2
+    dest: "{{ logging_base_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: 0640
+  tags: [deploy]
+
+- name: Deploy logging stack
+  docker_compose:
+    project_src: "{{ logging_base_dir }}"
+    state: present
+  tags: [deploy]
+
+- name: Wait for Elasticsearch to be ready
+  uri:
+    url: "http://localhost:9200/_cluster/health"
+    method: GET
+    return_content: yes
+    status_code: 200
+    user: "{{ elasticsearch_user | default('elastic') }}"
+    password: "{{ elasticsearch_password | default('changeme') }}"
+  register: es_health
+  until: es_health.status == 200 and es_health.json.status != "red"
+  retries: 30
+  delay: 10
+  tags: [deploy]
+
+- name: Import Kibana saved objects
+  shell: |
+    curl -X POST "localhost:5601/api/saved_objects/_import" \
+      -H "kbn-xsrf: true" \
+      --form file=@{{ logging_base_dir }}/kibana/saved_objects/{{ item }} \
+      -u "{{ kibana_user | default('kibana_system') }}:{{ kibana_password | default('changeme') }}"
+  with_items:
+    - "system-dashboard.ndjson"
+    - "security-dashboard.ndjson"
+  when: import_kibana_dashboards | bool
+  tags: [dashboards]
+
+- name: Set up log rotation for logging stack
+  template:
+    src: elk-logrotate.j2
+    dest: /etc/logrotate.d/elk
+    owner: root
+    group: root
+    mode: 0644
+  tags: [logs]
+
+- name: Document ethical considerations for logging
+  template:
+    src: logging-ethics.md.j2
+    dest: "{{ logging_base_dir }}/ETHICAL_CONSIDERATIONS.md"
+    owner: root
+    group: root
+    mode: 0644
+  tags: [ethics]

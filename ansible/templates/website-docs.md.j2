@@ -1,0 +1,135 @@
+# {{ website_name }} - Website Documentation
+
+## Overview
+
+This document provides technical documentation for the {{ website_name }} website deployed using the {{ website_template }} template.
+
+## Deployment Information
+
+- **Domain:** {{ website_name }}
+- **Template:** {{ website_template }}
+- **Deployment Date:** {{ ansible_date_time.date }}
+- **Deployment ID:** {{ deployment_id }}
+- **HTTPS Enabled:** {{ website_https | bool }}
+- **Monitoring Enabled:** {{ website_monitoring | bool }}
+- **Backups Enabled:** {{ website_backups | bool }}
+- **CDN Enabled:** {{ website_cdn | bool }}
+
+## Directory Structure
+
+```
+{{ website_root }}/
+├── public/         # Web root directory
+├── logs/           # Website logs
+├── backups/        # Local backups
+└── config/         # Website configuration
+```
+
+## Configuration
+
+The website is configured using the following files:
+
+- **Main Settings:** `{{ website_root }}/config/settings.php`
+- **Nginx Configuration:** `/etc/nginx/sites-available/{{ website_name }}.conf`
+{% if website_https %}
+- **SSL Certificates:** `/etc/letsencrypt/live/{{ website_name }}/`
+{% endif %}
+{% if 'traefik' in services | default(['nginx']) %}
+- **Traefik Configuration:** `{{ traefik_config_dir }}/dynamic/websites/{{ website_name }}.yml`
+{% endif %}
+
+## Maintenance Procedures
+
+### Updating Website Content
+
+To update the website content:
+
+1. Upload new files to the `{{ website_root }}/public/` directory
+2. Ensure proper permissions: `chown -R {{ website_owner }}:{{ website_group }} {{ website_root }}/public/`
+
+### SSL Certificate Renewal
+
+{% if website_https %}
+SSL certificates are automatically renewed through Let's Encrypt. Manual renewal:
+
+```bash
+certbot renew --cert-name {{ website_name }}
+```
+{% else %}
+HTTPS is not enabled for this website.
+{% endif %}
+
+### Backup and Restore
+
+{% if website_backups %}
+Backups are automatically created according to the configured schedule. To manually create a backup:
+
+```bash
+{{ backup_script_path }} {{ website_name }}
+```
+
+To restore from a backup:
+
+```bash
+{{ restore_script_path }} {{ website_name }} /path/to/backup/file
+```
+{% else %}
+Automatic backups are not configured for this website.
+{% endif %}
+
+## Monitoring
+
+{% if website_monitoring %}
+The website is monitored using the following checks:
+
+- **HTTP Status:** Ensures the website is responding with a 200 OK status
+- **SSL Certificate:** Monitors certificate expiration (if HTTPS is enabled)
+- **Response Time:** Tracks website performance metrics
+
+Access the monitoring dashboard at: `https://{{ monitoring_domain | default('monitoring.' + domain) }}`
+{% else %}
+Monitoring is not enabled for this website.
+{% endif %}
+
+## Performance Optimization
+
+The website is configured with the following performance optimizations:
+
+- **Caching:** Static assets are cached for {{ static_assets_cache_time | default('30 days') }}
+- **Compression:** Gzip compression is enabled for text-based assets
+- **HTTP/2:** Enabled for improved performance (with HTTPS)
+{% if website_cdn %}
+- **CDN:** Content delivery network is configured for improved global performance
+{% endif %}
+
+## Security Measures
+
+The website is secured with the following measures:
+
+{% if website_https %}
+- **HTTPS:** All traffic is encrypted using TLS 1.2/1.3
+- **HSTS:** Strict Transport Security is enabled
+- **Content Security Policy:** Restricts resource loading to prevent XSS attacks
+{% endif %}
+- **Access Controls:** Hidden files and configuration files are protected
+- **PHP Security:** Restricted execution time and memory limits
+
+## Ethical Considerations
+
+This website deployment follows SummitEthic's ethical principles:
+
+- **Privacy:** Minimal data collection in logs
+- **Security:** Best practices to protect visitor data
+- **Accessibility:** Template designed for WCAG compliance
+- **Resource Efficiency:** Optimized for minimal environmental impact
+
+## Support and Contact
+
+For technical support related to this website:
+
+- **Email:** {{ support_email | default('support@summitethic.com') }}
+- **Internal Ticket System:** Create a ticket in the SummitEthic support portal
+
+---
+
+*This documentation was generated automatically during website deployment by SummitEthic's infrastructure automation.*

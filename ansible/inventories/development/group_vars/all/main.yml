@@ -1,0 +1,68 @@
+---
+# Development environment configuration for SummitEthic
+
+# Basic settings
+env: "development"
+domain: "dev.summitethic.com"
+ansible_user: "summitethic"
+timezone: "UTC"
+
+# Infrastructure settings
+deployment_type: "development"
+use_https: true
+use_docker: true
+use_containers: true
+
+# Security settings
+security_level: "medium"
+firewall_default_policy: "drop"
+ssh_permit_root_login: "no"
+ssh_password_authentication: false
+fail2ban_enabled: true
+ufw_enabled: true
+
+# Docker settings
+docker_version: "20.10"
+docker_compose_version: "v2"
+docker_users:
+  - "{{ ansible_user }}"
+docker_daemon_options:
+  log-driver: "json-file"
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+  icc: false
+  userns-remap: "default"
+  live-restore: true
+  storage-driver: "overlay2"
+  metrics-addr: "127.0.0.1:9323"
+
+# Backup settings
+backup_enabled: true
+backup_retention_days: 7
+backup_encryption_enabled: true
+backup_remote_enabled: false
+
+# Monitoring settings
+monitoring_enabled: true
+monitoring_retention_days: 7
+alerting_enabled: true
+enable_resource_alerts: true
+data_access_monitoring: true
+
+# Logging settings
+logging_enabled: true
+logging_retention_days: 14
+anonymous_logging: true
+
+# Ethical settings
+ethical_monitoring_enabled: true
+ethical_audit_frequency: "weekly"
+data_collection_minimized: true
+resource_fairness_enabled: true
+audit_logging_enabled: true
+
+# Development-specific settings
+dev_auto_update: true
+dev_debug_mode: true
+dev_performance_tuning: false

@@ -1,0 +1,128 @@
+# {{ ansible_managed }}
+# SummitEthic Mailcow Configuration
+
+# -----------------------------
+# General Mailcow Settings
+# -----------------------------
+
+# Hostname
+MAILCOW_HOSTNAME={{ mailcow_hostname }}
+
+# Timezone
+TZ={{ mailcow_timezone | default('UTC') }}
+
+# Update check
+# Set to "y" if you want to check for updates on container start
+# (changes to this not recommended!)
+SKIP_LETS_ENCRYPT={{ 'y' if mailcow_skip_lets_encrypt | default(true) else 'n' }}
+SKIP_CLAMD={{ 'y' if mailcow_skip_clamd | default(false) else 'n' }}
+SKIP_SOLR={{ 'y' if mailcow_skip_solr | default(false) else 'n' }}
+SKIP_SOGO={{ 'y' if mailcow_skip_sogo | default(false) else 'n' }}
+SKIP_NGINX_POSTFIX_REDIS={{ 'y' if mailcow_skip_nginx_postfix_redis | default(false) else 'n' }}
+COMPOSE_PROJECT_NAME={{ mailcow_compose_project_name | default('mailcow-dockerized') }}
+
+# -----------------------------
+# Database Settings
+# -----------------------------
+
+DBNAME={{ mailcow_db_name | default('mailcow') }}
+DBUSER={{ mailcow_db_user | default('mailcow') }}
+DBPASS={{ mailcow_db_password | default(lookup('password', '/dev/null chars=ascii_letters,digits length=32')) }}
+DBROOT={{ mailcow_db_root_password | default(lookup('password', '/dev/null chars=ascii_letters,digits length=32')) }}
+
+# -----------------------------
+# Network Settings
+# -----------------------------
+
+# Your timezone
+TZ={{ mailcow_timezone | default('UTC') }}
+
+# Mailcow web UI ports
+HTTP_PORT={{ mailcow_http_port | default(80) }}
+HTTP_BIND={{ mailcow_http_bind | default('0.0.0.0') }}
+
+HTTPS_PORT={{ mailcow_https_port | default(443) }}
+HTTPS_BIND={{ mailcow_https_bind | default('0.0.0.0') }}
+
+# Subnet for Docker
+IPV4_NETWORK={{ mailcow_ipv4_network | default('172.22.1') }}
+IPV6_NETWORK={{ mailcow_ipv6_network | default('fd4d:6169:6c63:6f77::/64') }}
+
+# -----------------------------
+# Mail Security Settings
+# -----------------------------
+
+# Rspamd settings
+RSPAMD_LEARN={{ mailcow_rspamd_learn | default('yes') }}
+ALLOW_ADMIN_EMAIL_LOGIN={{ 'y' if mailcow_allow_admin_email_login | default(false) else 'n' }}
+
+# Default spam score
+# Scores equal to or higher than the default spam score are moved to Junk
+# (-1 = not classified as spam, 0-20 = spam threshold)
+SPAM_THRESHOLD={{ mailcow_spam_threshold | default(5.0) }}
+
+# Default subject for high-score spam emails
+SUBJECT_SPAM_CHAR={{ mailcow_subject_spam_char | default('⚠️ SPAM') }}
+
+# -----------------------------
+# SSL Settings
+# -----------------------------
+
+# Selfsigned certificates
+# You can set SKIP_LETS_ENCRYPT=y above and use this instead
+SELFSIGNED_CERTIFICATE={{ 'y' if mailcow_selfsigned_certificate | default(false) else 'n' }}
+
+# Using your own certificates
+# Set SKIP_LETS_ENCRYPT=y above before configuring this
+SKIP_IP_CHECK={{ 'y' if mailcow_skip_ip_check | default(false) else 'n' }}
+ADDITIONAL_SAN={{ mailcow_additional_san | default('') }}
+
+# -----------------------------
+# Backup Settings
+# -----------------------------
+
+# Backup settings
+BACKUP_LOCATION={{ mailcow_backup_location | default('/var/backups') }}
+MAILDIR_GC_TIME={{ mailcow_maildir_gc_time | default('1440') }}
+MAILDIR_SUB={{ mailcow_maildir_sub | default('Junk,Trash,Drafts,Sent') }}
+IMAPSYNC_LOG_EXCLUDE_FOLDERS={{ mailcow_imapsync_log_exclude_folders | default('Trash,Junk') }}
+
+# -----------------------------
+# Resource Limits
+# -----------------------------
+
+# Max memory per container in MB
+{% if mailcow_container_limits is defined %}
+# Resource limits for containers
+{% for container, limits in mailcow_container_limits.items() %}
+{{ container | upper }}_MAX_MEMORY={{ limits.memory | default('1024') }}
+{% endfor %}
+{% endif %}
+
+# -----------------------------
+# Custom Settings
+# -----------------------------
+
+# Additional settings
+{% if mailcow_custom_settings is defined %}
+{% for key, value in mailcow_custom_settings.items() %}
+{{ key }}={{ value }}
+{% endfor %}
+{% endif %}
+
+# -----------------------------
+# Ethical Settings
+# -----------------------------
+# The following settings ensure privacy-respecting operation:
+
+# Respect user privacy
+PRIVACY_MODE={{ 'y' if mailcow_privacy_mode | default(true) else 'n' }}
+
+# Minimize data collection
+DATA_RETENTION_DAYS={{ mailcow_data_retention_days | default(30) }}
+
+# Ethical spam and security handling
+TRANSPARENT_FILTERING={{ 'y' if mailcow_transparent_filtering | default(true) else 'n' }}
+
+# Apply ethical quotas for fair usage
+RESOURCE_FAIR_USAGE={{ 'y' if mailcow_resource_fair_usage | default(true) else 'n' }}

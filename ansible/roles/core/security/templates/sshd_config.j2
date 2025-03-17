@@ -1,0 +1,56 @@
+# {{ ansible_managed }}
+# SummitEthic SSH Security Configuration
+# Security Level: {{ security_level }}
+
+# Basic SSH configuration
+Port {{ ssh_port }}
+AddressFamily inet
+ListenAddress 0.0.0.0
+
+# Authentication methods
+PermitRootLogin {{ ssh_permit_root_login }}
+PasswordAuthentication {{ 'yes' if ssh_password_authentication | bool else 'no' }}
+PubkeyAuthentication yes
+AuthenticationMethods {{ ssh_authentication_methods }}
+
+# Security settings
+AllowGroups {{ ssh_allow_groups | join(' ') }}
+MaxAuthTries {{ ssh_max_auth_tries }}
+MaxSessions {{ ssh_max_sessions }}
+LoginGraceTime {{ ssh_login_grace_time }}
+
+# Cryptography settings
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+KexAlgorithms {{ ssh_kex_algorithms | join(',') }}
+Ciphers {{ ssh_ciphers | join(',') }}
+MACs {{ ssh_macs | join(',') }}
+
+# Hardening options
+IgnoreRhosts yes
+HostbasedAuthentication no
+PermitEmptyPasswords no
+PermitUserEnvironment no
+StrictModes yes
+X11Forwarding {{ 'yes' if ssh_x11_forwarding | bool else 'no' }}
+TCPKeepAlive {{ 'yes' if ssh_tcp_keep_alive | bool else 'no' }}
+
+# Logging
+SyslogFacility AUTH
+LogLevel {{ ssh_log_level }}
+
+# Banner
+Banner /etc/issue.net
+
+# Idle session timeout
+ClientAliveInterval {{ ssh_client_alive_interval }}
+ClientAliveCountMax {{ ssh_client_alive_count_max }}
+
+# Chroot configuration
+{% if ssh_chroot_directory | length > 0 %}
+ChrootDirectory {{ ssh_chroot_directory }}
+{% endif %}
+
+# Additional settings
+AllowAgentForwarding {{ 'yes' if ssh_allow_agent_forwarding | bool else 'no' }}
+AllowTcpForwarding {{ 'yes' if ssh_allow_tcp_forwarding | bool else 'no' }}

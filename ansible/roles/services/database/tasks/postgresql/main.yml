@@ -1,0 +1,78 @@
+---
+# PostgreSQL specific configuration tasks
+
+- name: Install PostgreSQL and dependencies
+  package:
+    name:
+      - postgresql-{{ postgres_version }}
+      - postgresql-client-{{ postgres_version }}
+      - postgresql-contrib-{{ postgres_version }}
+      - python3-psycopg2
+      - libpq-dev
+    state: present
+  register: postgres_install
+  until: postgres_install is success
+  retries: 3
+  delay: 5
+  tags: [install]
+
+- name: Create PostgreSQL directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: 0700
+  with_items:
+    - "{{ postgres_data_dir }}"
+    - "{{ postgres_backup_dir }}"
+  tags: [config]
+
+- name: Configure PostgreSQL main configuration
+  template:
+    src: postgresql/postgresql.conf.j2
+    dest: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+    owner: postgres
+    group: postgres
+    mode: 0644
+  notify: restart_postgres
+  tags: [config]
+
+- name: Configure PostgreSQL access control
+  template:
+    src: postgresql/pg_hba.conf.j2
+    dest: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+    owner: postgres
+    group: postgres
+    mode: 0640
+  notify: restart_postgres
+  tags: [config, security]
+
+- name: Ensure PostgreSQL service is enabled and started
+  systemd:
+    name: postgresql
+    enabled: yes
+    state: started
+  tags: [service]
+
+- name: Check if PostgreSQL is accepting connections
+  wait_for:
+    host: localhost
+    port: 5432
+    connect_timeout: 5
+    delay: 5
+    timeout: 60
+  tags: [service]
+
+- name: Configure PostgreSQL backups
+  import_tasks: postgresql/backup.yml
+  tags: [backup]
+
+- name: Configure PostgreSQL security
+  import_tasks: postgresql/secure.yml
+  tags: [security]
+
+- name: Configure PostgreSQL replication
+  import_tasks: postgresql/replication.yml
+  when: postgres_replication_enabled | bool
+  tags: [replication]

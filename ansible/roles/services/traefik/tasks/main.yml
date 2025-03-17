@@ -1,0 +1,94 @@
+---
+# Traefik reverse proxy implementation
+# Provides secure and ethical web traffic routing
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Check prerequisites
+  import_tasks: prerequisites.yml
+  tags: [prerequisites]
+
+- name: Create Traefik directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0750
+  with_items:
+    - "{{ traefik_config_dir }}"
+    - "{{ traefik_config_dir }}/conf.d"
+    - "{{ traefik_config_dir }}/dynamic"
+    - "{{ traefik_config_dir }}/acme"
+    - "{{ traefik_config_dir }}/logs"
+  tags: [config]
+
+- name: Configure Traefik security settings
+  template:
+    src: traefik-security.toml.j2
+    dest: "{{ traefik_config_dir }}/dynamic/security.toml"
+    owner: root
+    group: root
+    mode: 0640
+  notify: restart_traefik
+  tags: [config, security]
+
+- name: Configure Traefik middlewares
+  template:
+    src: middlewares.toml.j2
+    dest: "{{ traefik_config_dir }}/dynamic/middlewares.toml"
+    owner: root
+    group: root
+    mode: 0640
+  notify: restart_traefik
+  tags: [config]
+
+- name: Create Traefik docker-compose file
+  template:
+    src: traefik-docker-compose.yml.j2
+    dest: "{{ traefik_config_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: 0640
+  notify: restart_traefik
+  tags: [deploy]
+
+- name: Deploy Traefik service
+  docker_compose:
+    project_src: "{{ traefik_config_dir }}"
+    state: present
+  tags: [deploy]
+
+- name: Set up log rotation
+  template:
+    src: traefik-logrotate.j2
+    dest: /etc/logrotate.d/traefik
+    owner: root
+    group: root
+    mode: 0644
+  tags: [logs]
+
+- name: Configure firewall for Traefik
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  with_items:
+    - "80"
+    - "443"
+  tags: [firewall]
+
+- name: Configure dashboard security
+  template:
+    src: traefik-dashboard-auth.j2
+    dest: "{{ traefik_config_dir }}/dashboard_users"
+    owner: root
+    group: root
+    mode: 0640
+  when: traefik_dashboard_enabled | bool
+  tags: [dashboard, security]

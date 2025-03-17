@@ -1,0 +1,105 @@
+---
+# SummitEthic Platform Analytics Deployment
+# Implements ethical analytics with privacy-first approach
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Create analytics directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ analytics_user | default('summitethic') }}"
+    group: "{{ analytics_group | default('summitethic') }}"
+    mode: 0750
+  with_items:
+    - "{{ analytics_base_dir }}"
+    - "{{ analytics_base_dir }}/config"
+    - "{{ analytics_base_dir }}/logs"
+    - "{{ analytics_base_dir }}/data"
+    - "{{ analytics_base_dir }}/geoip"
+  tags: [directories]
+
+- name: Configure analytics environment variables
+  template:
+    src: "{{ analytics_type }}.env.j2"
+    dest: "{{ analytics_base_dir }}/config/analytics.env"
+    owner: "{{ analytics_user | default('summitethic') }}"
+    group: "{{ analytics_group | default('summitethic') }}"
+    mode: 0640
+  no_log: true
+  tags: [config]
+
+- name: Create analytics docker-compose file
+  template:
+    src: "{{ analytics_type }}-docker-compose.yml.j2"
+    dest: "{{ analytics_base_dir }}/docker-compose.yml"
+    owner: "{{ analytics_user | default('summitethic') }}"
+    group: "{{ analytics_group | default('summitethic') }}"
+    mode: 0640
+  tags: [deploy]
+
+- name: Configure database for analytics
+  include_tasks: database.yml
+  when: analytics_database_setup | bool
+  tags: [database]
+
+- name: Configure tracking scripts
+  include_tasks: tracking.yml
+  when: analytics_generate_tracking_scripts | bool
+  tags: [tracking]
+
+- name: Configure reporting
+  include_tasks: reporting.yml
+  when: analytics_reporting_enabled | bool
+  tags: [reporting]
+
+- name: Deploy analytics service
+  docker_compose:
+    project_src: "{{ analytics_base_dir }}"
+    state: present
+  become: true
+  become_user: "{{ analytics_user | default('summitethic') }}"
+  tags: [deploy]
+
+- name: Download GeoIP database
+  get_url:
+    url: "{{ analytics_geoip_url }}"
+    dest: "{{ analytics_base_dir }}/geoip/GeoLite2-City.mmdb"
+    owner: "{{ analytics_user | default('summitethic') }}"
+    group: "{{ analytics_group | default('summitethic') }}"
+    mode: 0640
+  when: analytics_geoip_enabled | bool
+  tags: [geoip]
+
+- name: Configure Nginx for analytics
+  template:
+    src: nginx-analytics.conf.j2
+    dest: "{{ analytics_base_dir }}/config/nginx.conf"
+    owner: "{{ analytics_user | default('summitethic') }}"
+    group: "{{ analytics_group | default('summitethic') }}"
+    mode: 0640
+  when: analytics_use_nginx | bool
+  tags: [nginx]
+
+- name: Create privacy documentation
+  template:
+    src: privacy-policy.md.j2
+    dest: "{{ analytics_base_dir }}/PRIVACY_POLICY.md"
+    owner: "{{ analytics_user | default('summitethic') }}"
+    group: "{{ analytics_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics, documentation]
+
+- name: Create ethical analytics guidelines
+  template:
+    src: ethical-analytics.md.j2
+    dest: "{{ analytics_base_dir }}/ETHICAL_GUIDELINES.md"
+    owner: "{{ analytics_user | default('summitethic') }}"
+    group: "{{ analytics_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics, documentation]

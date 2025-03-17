@@ -1,0 +1,152 @@
+---
+# Production environment inventory for SummitEthic
+
+all:
+  hosts:
+    prod-control:
+      ansible_host: 10.0.0.100
+      ansible_connection: ssh
+      ansible_user: summitethic
+      ansible_ssh_private_key_file: ~/.ssh/summitethic_prod_key
+      control_node: true
+
+  children:
+    web_servers:
+      hosts:
+        prod-web-01:
+          ansible_host: 10.0.1.5
+          nginx_domains:
+            - "www.summitethic.com"
+            - "summitethic.com"
+          cpus: 4
+          memory: "8G"
+          services:
+            - traefik
+            - nginx
+
+        prod-web-02:
+          ansible_host: 10.0.1.6
+          nginx_domains:
+            - "app.summitethic.com"
+            - "api.summitethic.com"
+          cpus: 4
+          memory: "8G"
+          services:
+            - traefik
+            - nginx
+
+    app_servers:
+      hosts:
+        prod-app-01:
+          ansible_host: 10.0.1.20
+          cpus: 8
+          memory: "16G"
+          services:
+            - node
+            - python
+            - java
+
+        prod-app-02:
+          ansible_host: 10.0.1.21
+          cpus: 8
+          memory: "16G"
+          services:
+            - node
+            - python
+            - java
+
+    db_servers:
+      hosts:
+        prod-db-01:
+          ansible_host: 10.0.2.5
+          mysql_server_id: 1
+          mysql_role: "master"
+          cpus: 8
+          memory: "32G"
+          mysql_version: "8.0"
+          backup_schedule: "0 1 * * *"
+
+        prod-db-02:
+          ansible_host: 10.0.2.6
+          mysql_server_id: 2
+          mysql_role: "replica"
+          cpus: 8
+          memory: "32G"
+          mysql_version: "8.0"
+          backup_schedule: "0 2 * * *"
+
+    redis_servers:
+      hosts:
+        prod-redis-01:
+          ansible_host: 10.0.2.20
+          redis_role: "master"
+          cpus: 4
+          memory: "8G"
+          redis_version: "7.0"
+
+        prod-redis-02:
+          ansible_host: 10.0.2.21
+          redis_role: "replica"
+          cpus: 4
+          memory: "8G"
+          redis_version: "7.0"
+
+    mail_servers:
+      hosts:
+        prod-mail-01:
+          ansible_host: 10.0.3.5
+          cpus: 4
+          memory: "8G"
+          mailcow_hostname: "mail.summitethic.com"
+          mail_relay_host: "smtp.example.com"
+          spf_record: "v=spf1 mx ~all"
+
+    monitoring_servers:
+      hosts:
+        prod-monitoring-01:
+          ansible_host: 10.0.3.20
+          cpus: 4
+          memory: "8G"
+          prometheus_retention: "30d"
+          grafana_admin_user: "admin"
+          grafana_domain: "monitoring.summitethic.com"
+          alertmanager_enabled: true
+
+    logging_servers:
+      hosts:
+        prod-logging-01:
+          ansible_host: 10.0.3.30
+          cpus: 4
+          memory: "16G"
+          elasticsearch_version: "7.17.9"
+          kibana_version: "7.17.9"
+          logstash_version: "7.17.9"
+
+    backup_servers:
+      hosts:
+        prod-backup-01:
+          ansible_host: 10.0.3.40
+          cpus: 2
+          memory: "4G"
+          backup_retention: 30
+          backup_encryption: true
+
+    container_hosts:
+      children:
+        web_servers:
+        app_servers:
+        mail_servers:
+        monitoring_servers:
+        logging_servers:
+
+    production:
+      children:
+        web_servers:
+        app_servers:
+        db_servers:
+        redis_servers:
+        mail_servers:
+        monitoring_servers:
+        logging_servers:
+        backup_servers:
+        container_hosts:

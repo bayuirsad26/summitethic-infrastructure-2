@@ -1,0 +1,83 @@
+# {{ ansible_managed }}
+# SummitEthic Traefik Configuration - Version {{ traefik_version }}
+
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:{{ traefik_version }}
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy
+    ports:
+      - "80:80"
+      - "443:443"
+      {% if traefik_dashboard_enabled | bool %}
+      - "127.0.0.1:8080:8080"
+      {% endif %}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - {{ traefik_config_dir }}/traefik.yml:/etc/traefik/traefik.yml:ro
+      - {{ traefik_config_dir }}/dynamic:/etc/traefik/dynamic:ro
+      - {{ traefik_config_dir }}/acme:/etc/traefik/acme
+      - {{ traefik_config_dir }}/logs:/logs
+    environment:
+      - TZ={{ timezone | default('UTC') }}
+      {% if traefik_dashboard_password is defined %}
+      - DASHBOARD_USER={{ traefik_dashboard_user | default('admin') }}
+      - DASHBOARD_PASSWORD={{ traefik_dashboard_password }}
+      {% endif %}
+    command:
+      - "--global.checkNewVersion=false"
+      - "--global.sendAnonymousUsage=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--api{% if traefik_dashboard_enabled | bool %}.dashboard=true{% endif %}"
+      - "--log.level={{ traefik_log_level | default('INFO') }}"
+      - "--log.filepath=/logs/traefik.log"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/logs/access.log"
+      - "--accesslog.fields.headers.names.User-Agent=keep"
+      - "--accesslog.bufferingsize=100"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=proxy"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--certificatesresolvers.letsencrypt.acme.email={{ acme_email }}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.buckets=0.1,0.3,1.2,5.0"
+      - "--entrypoints.metrics.address=:8082"
+      {% if traefik_pilot_token is defined %}
+      - "--pilot.token={{ traefik_pilot_token }}"
+      {% endif %}
+    labels:
+      - "traefik.enable=true"
+      {% if traefik_dashboard_enabled | bool %}
+      - "traefik.http.routers.dashboard.rule=Host(`{{ traefik_dashboard_host }}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users={{ traefik_dashboard_auth_users }}"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth,secHeaders@file"
+      {% endif %}
+      - "traefik.http.routers.traefik-metrics.rule=Host(`{{ traefik_dashboard_host }}`) && PathPrefix(`/metrics`)"
+      - "traefik.http.routers.traefik-metrics.service=prometheus@internal"
+      - "traefik.http.routers.traefik-metrics.entrypoints=metrics"
+      # Ethical labels to document purpose and security status
+      - "org.summitethic.service=reverse-proxy"
+      - "org.summitethic.security-reviewed=true"
+      - "org.summitethic.ethical-clearance=approved"
+      - "org.summitethic.data-processing=traffic-routing-only"
+
+networks:
+  proxy:
+    name: proxy
+    external: true

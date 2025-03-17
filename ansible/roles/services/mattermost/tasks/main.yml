@@ -1,0 +1,87 @@
+---
+# Mattermost team communication platform for SummitEthic
+# Implements secure and ethical team collaboration
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Create Mattermost directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ mattermost_user | default('summitethic') }}"
+    group: "{{ mattermost_group | default('summitethic') }}"
+    mode: 0750
+  with_items:
+    - "{{ mattermost_base_dir }}"
+    - "{{ mattermost_base_dir }}/config"
+    - "{{ mattermost_base_dir }}/data"
+    - "{{ mattermost_base_dir }}/logs"
+    - "{{ mattermost_base_dir }}/plugins"
+    - "{{ mattermost_base_dir }}/client/plugins"
+    - "{{ mattermost_base_dir }}/bleve-indexes"
+  tags: [directories]
+
+- name: Configure database for Mattermost
+  include_tasks: database.yml
+  when: mattermost_configure_database | bool
+  tags: [database]
+
+- name: Create Mattermost docker-compose file
+  template:
+    src: mattermost-docker-compose.yml.j2
+    dest: "{{ mattermost_base_dir }}/docker-compose.yml"
+    owner: "{{ mattermost_user | default('summitethic') }}"
+    group: "{{ mattermost_group | default('summitethic') }}"
+    mode: 0640
+  tags: [deploy]
+
+- name: Create Mattermost configuration file
+  template:
+    src: config.json.j2
+    dest: "{{ mattermost_base_dir }}/config/config.json"
+    owner: "{{ mattermost_user | default('summitethic') }}"
+    group: "{{ mattermost_group | default('summitethic') }}"
+    mode: 0640
+  tags: [config]
+
+- name: Deploy Mattermost service
+  docker_compose:
+    project_src: "{{ mattermost_base_dir }}"
+    state: present
+  become: true
+  become_user: "{{ mattermost_user | default('summitethic') }}"
+  tags: [deploy]
+
+- name: Configure Traefik integration
+  include_tasks: traefik.yml
+  when: mattermost_traefik_integration | bool
+  tags: [traefik]
+
+- name: Configure Mattermost backups
+  include_tasks: backup.yml
+  when: mattermost_backup_enabled | bool
+  tags: [backup]
+
+- name: Configure SSO integration
+  include_tasks: sso.yml
+  when: mattermost_sso_enabled | bool
+  tags: [sso]
+
+- name: Configure Mattermost monitoring
+  include_tasks: monitoring.yml
+  when: mattermost_monitoring_enabled | bool
+  tags: [monitoring]
+
+- name: Create ethical communication policy
+  template:
+    src: ethical-communication-policy.md.j2
+    dest: "{{ mattermost_base_dir }}/ETHICAL_COMMUNICATION_POLICY.md"
+    owner: "{{ mattermost_user | default('summitethic') }}"
+    group: "{{ mattermost_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics, documentation]

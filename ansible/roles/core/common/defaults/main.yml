@@ -1,0 +1,46 @@
+---
+# Default variables for common role
+
+# System packages to install on all servers
+common_packages:
+  - vim
+  - htop
+  - curl
+  - wget
+  - unzip
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - python3
+  - python3-pip
+  - python3-apt
+  - sudo
+  - fail2ban
+  - ufw
+  - git
+  - rsync
+  - acl
+  - dnsutils
+  - net-tools
+  - ntp
+
+# Packages to remove for security reasons
+common_packages_to_remove:
+  - telnet
+  - rsh-client
+  - rsh-server
+
+# Whether to update all packages
+common_update_all: true
+
+# System timezone
+common_timezone: "UTC"
+
+# System locale settings
+common_locale: "en_US.UTF-8"
+
+# Network configuration
+common_network:
+  hostname_setup: true
+  disable_ipv6: false

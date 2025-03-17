@@ -1,0 +1,131 @@
+---
+# Docker installation and security hardening
+# Following SummitEthic security standards
+
+- name: Install Docker prerequisites
+  package:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+  register: docker_prereq_install
+  until: docker_prereq_install is success
+  retries: 3
+  delay: 5
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
+    state: present
+  register: docker_apt_key
+  until: docker_apt_key is success
+  retries: 3
+  delay: 5
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch={{ ansible_architecture }}] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+    state: present
+    update_cache: yes
+  register: docker_repo_add
+  until: docker_repo_add is success
+  retries: 3
+  delay: 5
+
+- name: Install Docker
+  package:
+    name:
+      - docker-ce={{ docker_version }}*
+      - docker-ce-cli={{ docker_version }}*
+      - containerd.io
+    state: present
+  register: docker_install
+  until: docker_install is success
+  retries: 3
+  delay: 5
+
+- name: Create Docker config directory
+  file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Configure Docker daemon with security settings
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart_docker
+
+- name: Create Docker service directory
+  file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create Docker service override
+  template:
+    src: docker-override.conf.j2
+    dest: /etc/systemd/system/docker.service.d/override.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart_docker
+
+- name: Enable Docker service
+  systemd:
+    name: docker
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Set up Docker user group
+  user:
+    name: "{{ item }}"
+    groups: docker
+    append: yes
+  with_items: "{{ docker_users }}"
+  when: docker_users is defined and docker_users|length > 0
+
+- name: Create Docker bench security directory
+  file:
+    path: /opt/docker-bench-security
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  when: docker_security_bench | bool
+
+- name: Download Docker bench security
+  get_url:
+    url: https://github.com/docker/docker-bench-security/archive/main.zip
+    dest: /tmp/docker-bench-security.zip
+    mode: 0644
+  when: docker_security_bench | bool
+
+- name: Extract Docker bench security
+  unarchive:
+    src: /tmp/docker-bench-security.zip
+    dest: /opt/docker-bench-security
+    remote_src: yes
+    extra_opts:
+      - --strip-components=1
+  when: docker_security_bench | bool
+
+- name: Schedule Docker security audit
+  cron:
+    name: "Docker security audit"
+    hour: "3"
+    minute: "30"
+    weekday: "0"
+    job: "/opt/docker-bench-security/docker-bench-security.sh > /var/log/docker-security-audit-$(date +\\%Y\\%m\\%d).log 2>&1"
+  when: docker_security_bench | bool

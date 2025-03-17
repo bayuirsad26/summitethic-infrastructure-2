@@ -1,0 +1,101 @@
+---
+# SummitEthic Platform CMS Deployment
+# Implements the content management system with ethical considerations
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Create CMS directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ cms_user | default('summitethic') }}"
+    group: "{{ cms_group | default('summitethic') }}"
+    mode: 0750
+  with_items:
+    - "{{ cms_base_dir }}"
+    - "{{ cms_base_dir }}/config"
+    - "{{ cms_base_dir }}/logs"
+    - "{{ cms_base_dir }}/data"
+    - "{{ cms_base_dir }}/uploads"
+    - "{{ cms_base_dir }}/certs"
+  tags: [directories]
+
+- name: Configure CMS environment variables
+  template:
+    src: .env.j2
+    dest: "{{ cms_base_dir }}/.env"
+    owner: "{{ cms_user | default('summitethic') }}"
+    group: "{{ cms_group | default('summitethic') }}"
+    mode: 0640
+  no_log: true
+  tags: [config]
+
+- name: Create CMS docker-compose file
+  template:
+    src: cms-docker-compose.yml.j2
+    dest: "{{ cms_base_dir }}/docker-compose.yml"
+    owner: "{{ cms_user | default('summitethic') }}"
+    group: "{{ cms_group | default('summitethic') }}"
+    mode: 0640
+  tags: [deploy]
+
+- name: Configure database for CMS
+  include_tasks: database.yml
+  when: cms_configure_database | bool
+  tags: [database]
+
+- name: Configure media storage for CMS
+  include_tasks: media.yml
+  when: cms_configure_media | bool
+  tags: [media]
+
+- name: Configure CMS themes
+  include_tasks: themes.yml
+  when: cms_configure_themes | bool
+  tags: [themes]
+
+- name: Deploy CMS service
+  docker_compose:
+    project_src: "{{ cms_base_dir }}"
+    state: present
+  become: true
+  become_user: "{{ cms_user | default('summitethic') }}"
+  tags: [deploy]
+
+- name: Configure CMS security
+  include_tasks: security.yml
+  when: cms_security_level != 'low'
+  tags: [security]
+
+- name: Configure CMS backup
+  include_tasks: backup.yml
+  when: cms_backup_enabled | bool
+  tags: [backup]
+
+- name: Configure CMS accessibility
+  include_tasks: accessibility.yml
+  when: cms_accessibility_enabled | bool
+  tags: [accessibility]
+
+- name: Create content guidelines document
+  template:
+    src: content-guidelines.md.j2
+    dest: "{{ cms_base_dir }}/CONTENT_GUIDELINES.md"
+    owner: "{{ cms_user | default('summitethic') }}"
+    group: "{{ cms_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics, documentation]
+
+- name: Create ethical CMS usage document
+  template:
+    src: ethical-cms-usage.md.j2
+    dest: "{{ cms_base_dir }}/ETHICAL_USAGE.md"
+    owner: "{{ cms_user | default('summitethic') }}"
+    group: "{{ cms_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics, documentation]

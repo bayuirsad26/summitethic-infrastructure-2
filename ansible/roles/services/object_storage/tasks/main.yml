@@ -1,0 +1,106 @@
+---
+# Object storage configuration for SummitEthic infrastructure
+# Implements MinIO as an S3-compatible object storage solution
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Create MinIO directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0750
+  with_items:
+    - "{{ minio_base_dir }}"
+    - "{{ minio_base_dir }}/config"
+    - "{{ minio_base_dir }}/data"
+    - "{{ minio_base_dir }}/certs"
+    - "{{ minio_base_dir }}/policies"
+  tags: [directories]
+
+- name: Generate MinIO credentials
+  block:
+    - name: Generate access key
+      set_fact:
+        minio_access_key: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=20') }}"
+      when: minio_access_key is not defined
+      no_log: true
+
+    - name: Generate secret key
+      set_fact:
+        minio_secret_key: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=40') }}"
+      when: minio_secret_key is not defined
+      no_log: true
+  when: minio_generate_credentials | bool
+  tags: [credentials]
+
+- name: Create MinIO environment file
+  template:
+    src: minio.env.j2
+    dest: "{{ minio_base_dir }}/config/minio.env"
+    owner: root
+    group: root
+    mode: 0600
+  no_log: true
+  tags: [config]
+
+- name: Create MinIO docker-compose file
+  template:
+    src: minio-docker-compose.yml.j2
+    dest: "{{ minio_base_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: 0640
+  tags: [deploy]
+
+- name: Generate TLS certificates for MinIO
+  include_tasks: certificates.yml
+  when: minio_enable_tls | bool
+  tags: [certificates]
+
+- name: Deploy MinIO service
+  docker_compose:
+    project_src: "{{ minio_base_dir }}"
+    state: present
+  tags: [deploy]
+
+- name: Wait for MinIO to be ready
+  uri:
+    url: "http{{ 's' if minio_enable_tls else '' }}://localhost:{{ minio_api_port }}/minio/health/live"
+    method: GET
+    status_code: 200
+  register: minio_health
+  until: minio_health.status == 200
+  retries: 12
+  delay: 5
+  tags: [deploy]
+
+- name: Configure MinIO buckets
+  include_tasks: buckets.yml
+  when: minio_create_buckets | bool
+  tags: [buckets]
+
+- name: Configure MinIO users and policies
+  include_tasks: users.yml
+  when: minio_manage_users | bool
+  tags: [users]
+
+- name: Configure MinIO monitoring
+  include_tasks: monitoring.yml
+  when: minio_enable_monitoring | bool
+  tags: [monitoring]
+
+- name: Document ethical data handling
+  template:
+    src: ethical-data-handling.md.j2
+    dest: "{{ minio_base_dir }}/ETHICAL_DATA_HANDLING.md"
+    owner: root
+    group: root
+    mode: 0644
+  tags: [documentation, ethics]

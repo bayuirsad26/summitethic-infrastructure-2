@@ -1,0 +1,36 @@
+---
+# Common role tasks - applies baseline configuration to all servers
+# Ensures consistent system setup across infrastructure
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution | lower }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Include packages tasks
+  import_tasks: packages.yml
+  tags: [packages]
+
+- name: Include security tasks
+  import_tasks: security.yml
+  tags: [security]
+
+- name: Include NTP tasks
+  import_tasks: ntp.yml
+  tags: [ntp]
+
+- name: Include sysctl tasks
+  import_tasks: sysctl.yml
+  tags: [sysctl]
+
+- name: Setup custom banner
+  template:
+    src: motd.j2
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: 0644
+  tags: [motd]

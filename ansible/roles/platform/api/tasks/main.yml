@@ -1,0 +1,91 @@
+---
+# SummitEthic Platform API Deployment
+# Implements the backend API service following ethical considerations
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Create API directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0750
+  with_items:
+    - "{{ api_base_dir }}"
+    - "{{ api_base_dir }}/config"
+    - "{{ api_base_dir }}/logs"
+    - "{{ api_base_dir }}/data"
+    - "{{ api_base_dir }}/certs"
+  tags: [directories]
+
+- name: Configure API environment variables
+  template:
+    src: .env.j2
+    dest: "{{ api_base_dir }}/.env"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  no_log: true
+  tags: [config]
+
+- name: Create API docker-compose file
+  template:
+    src: api-docker-compose.yml.j2
+    dest: "{{ api_base_dir }}/docker-compose.yml"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  tags: [deploy]
+
+- name: Configure database connection
+  include_tasks: database.yml
+  when: api_configure_database | bool
+  tags: [database]
+
+- name: Configure API cache
+  include_tasks: cache.yml
+  when: api_configure_cache | bool
+  tags: [cache]
+
+- name: Deploy API service
+  docker_compose:
+    project_src: "{{ api_base_dir }}"
+    state: present
+  become: true
+  become_user: "{{ api_user | default('summitethic') }}"
+  tags: [deploy]
+
+- name: Configure API scaling
+  include_tasks: scaling.yml
+  when: api_enable_scaling | bool
+  tags: [scaling]
+
+- name: Set up API monitoring
+  include_tasks: monitoring.yml
+  when: api_enable_monitoring | bool
+  tags: [monitoring]
+
+- name: Configure API security
+  include_tasks: security.yml
+  when: api_security_level != 'low'
+  tags: [security]
+
+- name: Configure API documentation
+  include_tasks: documentation.yml
+  when: api_generate_docs | bool
+  tags: [documentation]
+
+- name: Create ethical data handling document
+  template:
+    src: data-ethics.md.j2
+    dest: "{{ api_base_dir }}/DATA_ETHICS.md"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0644
+  tags: [ethics]

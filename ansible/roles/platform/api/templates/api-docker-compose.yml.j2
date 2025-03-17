@@ -1,0 +1,171 @@
+# {{ ansible_managed }}
+# SummitEthic Platform API
+
+version: '3.8'
+
+services:
+  api:
+    image: {{ api_image }}:{{ api_version }}
+    container_name: summitethic-api
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      - NODE_ENV={{ api_environment | default('production') }}
+      - PORT={{ api_internal_port | default(3000) }}
+      - DATABASE_URL={{ api_database_url }}
+      {% if api_redis_enabled | bool %}
+      - REDIS_URL={{ api_redis_url }}
+      {% endif %}
+      - LOG_LEVEL={{ api_log_level | default('info') }}
+      - API_SECRET={{ api_secret }}
+      - ALLOWED_ORIGINS={{ api_allowed_origins | join(',') }}
+      - RATE_LIMIT_WINDOW={{ api_rate_limit_window | default(60000) }}
+      - RATE_LIMIT_MAX={{ api_rate_limit_max | default(100) }}
+      - DATA_ENCRYPTION_KEY={{ api_data_encryption_key }}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      {% if api_use_local_config | bool %}
+      - ./config:/app/config:ro
+      {% endif %}
+      {% if api_use_local_certs | bool %}
+      - ./certs:/app/certs:ro
+      {% endif %}
+    ports:
+      - "127.0.0.1:{{ api_external_port | default(3000) }}:{{ api_internal_port | default(3000) }}"
+    depends_on:
+      {% if api_database_type == 'postgres' %}
+      - postgres
+      {% elif api_database_type == 'mysql' %}
+      - mysql
+      {% endif %}
+      {% if api_redis_enabled | bool %}
+      - redis
+      {% endif %}
+    networks:
+      - api_network
+      {% if api_use_external_db | bool %}
+      - database_network
+      {% endif %}
+      {% if api_redis_enabled | bool and api_use_external_redis | bool %}
+      - redis_network
+      {% endif %}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:{{ api_internal_port | default(3000) }}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      # Ethical labels to document purpose and security status
+      - "org.summitethic.service=api"
+      - "org.summitethic.security-reviewed=true"
+      - "org.summitethic.ethical-clearance=approved"
+      - "org.summitethic.data-classification=confidential"
+      - "org.summitethic.data-encryption=enabled"
+      - "org.summitethic.pii-handling=minimal"
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`{{ api_domain | default('api.' + domain) }}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.api.loadbalancer.server.port={{ api_internal_port | default(3000) }}"
+      - "traefik.http.routers.api.middlewares=api-ratelimit,secHeaders@file"
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.average={{ api_rate_limit_max | default(100) }}"
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.period={{ api_rate_limit_window | default(60) }}s"
+
+  {% if not api_use_external_db | bool and api_database_type == 'postgres' %}
+  postgres:
+    image: postgres:{{ api_postgres_version | default('14') }}
+    container_name: summitethic-api-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:{{ api_postgres_port | default(5432) }}:5432"
+    networks:
+      - api_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+  {% endif %}
+
+  {% if not api_use_external_db | bool and api_database_type == 'mysql' %}
+  mysql:
+    image: mysql:{{ api_mysql_version | default('8.0') }}
+    container_name: summitethic-api-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:{{ api_mysql_port | default(3306) }}:3306"
+    networks:
+      - api_network
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER}", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+  {% endif %}
+
+  {% if api_redis_enabled | bool and not api_use_external_redis | bool %}
+  redis:
+    image: redis:{{ api_redis_version | default('7.0') }}
+    container_name: summitethic-api-redis
+    restart: unless-stopped
+    command: >
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory {{ api_redis_maxmemory | default('256mb') }}
+      --maxmemory-policy {{ api_redis_maxmemory_policy | default('allkeys-lru') }}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:{{ api_redis_port | default(6379) }}:6379"
+    networks:
+      - api_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+  {% endif %}
+
+networks:
+  api_network:
+    driver: bridge
+  {% if api_use_external_db | bool %}
+  database_network:
+    external: true
+  {% endif %}
+  {% if api_redis_enabled | bool and api_use_external_redis | bool %}
+  redis_network:
+    external: true
+  {% endif %}
+
+volumes:
+  {% if not api_use_external_db | bool and api_database_type == 'postgres' %}
+  postgres_data:
+  {% endif %}
+  {% if not api_use_external_db | bool and api_database_type == 'mysql' %}
+  mysql_data:
+  {% endif %}
+  {% if api_redis_enabled | bool and not api_use_external_redis | bool %}
+  redis_data:
+  {% endif %}

@@ -1,0 +1,88 @@
+---
+# Database configuration for SummitEthic infrastructure
+# Implements secure and ethical database setup
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Include database engine specific tasks
+  include_tasks: "{{ db_engine }}/main.yml"
+  when: db_engine in ['postgresql', 'mysql']
+  tags: [db]
+
+- name: Create database backup directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ db_backup_user | default('root') }}"
+    group: "{{ db_backup_group | default('root') }}"
+    mode: 0750
+  with_items:
+    - "{{ db_backup_dir }}"
+    - "{{ db_backup_dir }}/daily"
+    - "{{ db_backup_dir }}/weekly"
+    - "{{ db_backup_dir }}/monthly"
+  tags: [backup]
+
+- name: Create database backup script
+  template:
+    src: "{{ db_engine }}/backup.sh.j2"
+    dest: "{{ db_backup_script_path }}"
+    owner: root
+    group: root
+    mode: 0750
+  tags: [backup]
+
+- name: Configure database backup cron jobs
+  cron:
+    name: "{{ item.name }}"
+    user: "{{ db_backup_user | default('root') }}"
+    hour: "{{ item.hour }}"
+    minute: "{{ item.minute }}"
+    weekday: "{{ item.weekday | default('*') }}"
+    month: "{{ item.month | default('*') }}"
+    day: "{{ item.day | default('*') }}"
+    job: "{{ item.job }}"
+  with_items:
+    - name: "Daily database backup"
+      hour: "1"
+      minute: "30"
+      job: "{{ db_backup_script_path }} daily >> {{ db_backup_dir }}/backup.log 2>&1"
+    - name: "Weekly database backup"
+      hour: "2"
+      minute: "30"
+      weekday: "0"
+      job: "{{ db_backup_script_path }} weekly >> {{ db_backup_dir }}/backup.log 2>&1"
+    - name: "Monthly database backup"
+      hour: "3"
+      minute: "30"
+      day: "1"
+      job: "{{ db_backup_script_path }} monthly >> {{ db_backup_dir }}/backup.log 2>&1"
+  tags: [backup, cron]
+
+- name: Configure database backup rotation
+  template:
+    src: backup-cleanup.sh.j2
+    dest: "{{ db_backup_cleanup_script_path }}"
+    owner: root
+    group: root
+    mode: 0750
+  tags: [backup]
+
+- name: Schedule backup cleanup
+  cron:
+    name: "Database backup cleanup"
+    user: "{{ db_backup_user | default('root') }}"
+    hour: "4"
+    minute: "30"
+    job: "{{ db_backup_cleanup_script_path }} >> {{ db_backup_dir }}/cleanup.log 2>&1"
+  tags: [backup, cron]
+
+- name: Configure database monitoring
+  include_tasks: monitoring.yml
+  when: db_monitoring_enabled | bool
+  tags: [monitoring]
