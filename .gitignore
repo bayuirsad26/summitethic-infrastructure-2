@@ -1,0 +1,100 @@
+# Ansible
+*.retry
+ansible/inventories/**/vault_password.txt
+ansible/collections/ansible_collections
+*.vault
+*.pyc
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraformrc
+terraform.rc
+.terraform.lock.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+**/.terraform/*
+
+# Credential files
+*.pem
+*.key
+**/id_rsa*
+*.pub
+*.crt
+*.cer
+*.ca-bundle
+
+# Secret management
+**/secrets/
+**/secret
+**/.secrets/*
+**/.env
+**/.env.*
+
+# Logs
+*.log
+**/logs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.python-version
+.coverage
+
+# IDE and editor files
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+*.sublime-*
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Package managers
+node_modules/
+yarn-error.log
+npm-debug.log
+package-lock.json
+
+# Build artifacts
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Ansible specific
+.ansible/
+ansible/backup/
+ansible/roles/*/vars/*.yml
+!ansible/roles/*/vars/main.yml
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# File generated for development
+*.tmp
+*.temp
+*.bak
+
+# Application specific ignores 
+**/ethical_reports/
+**/generated/
