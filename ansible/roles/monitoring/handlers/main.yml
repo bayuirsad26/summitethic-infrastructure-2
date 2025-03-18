@@ -1,0 +1,52 @@
+---
+# Handlers for monitoring role
+
+- name: restart_prometheus
+  docker_compose:
+    project_src: "{{ prometheus_config_dir }}"
+    services:
+      - prometheus
+    restarted: true
+  tags: [prometheus]
+
+- name: restart_alertmanager
+  docker_compose:
+    project_src: "{{ alertmanager_config_dir }}"
+    services:
+      - alertmanager
+    restarted: true
+  tags: [alertmanager]
+
+- name: restart_grafana
+  docker_compose:
+    project_src: "{{ grafana_config_dir }}"
+    services:
+      - grafana
+    restarted: true
+  tags: [grafana]
+
+- name: restart_node_exporter
+  systemd:
+    name: node_exporter
+    state: restarted
+  tags: [node_exporter]
+
+- name: reload_prometheus
+  uri:
+    url: "http://localhost:9090/-/reload"
+    method: POST
+    status_code: 200
+  tags: [prometheus]
+
+- name: reload_alertmanager
+  uri:
+    url: "http://localhost:9093/-/reload"
+    method: POST
+    status_code: 200
+  tags: [alertmanager]
+
+- name: reload_nginx
+  service:
+    name: nginx
+    state: reloaded
+  tags: [nginx]

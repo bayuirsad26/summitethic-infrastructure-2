@@ -1,0 +1,57 @@
+---
+# Database role default variables
+
+# Database engine (postgresql, mysql)
+db_engine: "postgresql"
+
+# PostgreSQL settings
+postgres_version: "14"
+postgres_listen_addresses: "localhost"
+postgres_port: 5432
+postgres_max_connections: 100
+postgres_data_dir: "/var/lib/postgresql/{{ postgres_version }}/main"
+postgres_backup_dir: "/var/backups/postgresql"
+
+# Memory settings (adjust based on server resources)
+postgres_shared_buffers: "1GB"
+postgres_work_mem: "4MB"
+postgres_maintenance_work_mem: "64MB"
+postgres_effective_cache_size: "4GB"
+
+# Security settings
+postgres_ssl_enabled: true
+postgres_password_encryption: "scram-sha-256"
+postgres_replication_enabled: false
+postgres_allowed_hosts: []
+
+# Performance tuning
+postgres_autovacuum: true
+postgres_checkpoint_timeout: "5min"
+postgres_checkpoint_completion_target: 0.9
+postgres_track_io_timing: true
+
+# Logging settings
+postgres_log_min_messages: "warning"
+postgres_log_min_error_statement: "error"
+postgres_log_min_duration_statement: 1000
+
+# Backup settings
+db_backup_user: "postgres"
+db_backup_group: "postgres"
+db_backup_script_path: "/usr/local/bin/postgres-backup.sh"
+db_backup_cleanup_script_path: "/usr/local/bin/postgres-backup-cleanup.sh"
+db_backup_retention_days:
+  daily: 7
+  weekly: 4
+  monthly: 6
+
+# Monitoring settings
+db_monitoring_enabled: true
+postgres_track_functions: "all"
+postgres_track_activity_query_size: 4096
+
+# Ethical settings
+db_data_minimization: true
+db_encrypt_sensitive_columns: true
+db_anonymize_logs: true
+db_resource_fairness: true

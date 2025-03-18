@@ -1,0 +1,93 @@
+---
+# Prometheus setup tasks
+
+- name: Create Prometheus directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ prometheus_user | default('prometheus') }}"
+    group: "{{ prometheus_group | default('prometheus') }}"
+    mode: 0750
+  with_items:
+    - "{{ prometheus_config_dir }}"
+    - "{{ prometheus_config_dir }}/rules"
+    - "{{ prometheus_config_dir }}/alerts"
+    - "{{ prometheus_data_dir }}"
+  tags: [config]
+
+- name: Create Prometheus configuration
+  template:
+    src: prometheus/prometheus.yml.j2
+    dest: "{{ prometheus_config_dir }}/prometheus.yml"
+    owner: "{{ prometheus_user | default('prometheus') }}"
+    group: "{{ prometheus_group | default('prometheus') }}"
+    mode: 0640
+  notify: restart_prometheus
+  tags: [config]
+
+- name: Configure Prometheus alert rules
+  template:
+    src: "prometheus/alerts/{{ item }}.yml.j2"
+    dest: "{{ prometheus_config_dir }}/alerts/{{ item }}.yml"
+    owner: "{{ prometheus_user | default('prometheus') }}"
+    group: "{{ prometheus_group | default('prometheus') }}"
+    mode: 0640
+  with_items:
+    - host_alerts
+    - service_alerts
+    - ethical_alerts
+    - security_alerts
+    - performance_alerts
+  notify: restart_prometheus
+  tags: [alerts]
+
+- name: Configure Prometheus recording rules
+  template:
+    src: prometheus/rules/recording_rules.yml.j2
+    dest: "{{ prometheus_config_dir }}/rules/recording_rules.yml"
+    owner: "{{ prometheus_user | default('prometheus') }}"
+    group: "{{ prometheus_group | default('prometheus') }}"
+    mode: 0640
+  notify: restart_prometheus
+  tags: [rules]
+
+- name: Create Docker Compose file for Prometheus
+  template:
+    src: prometheus/docker-compose.yml.j2
+    dest: "{{ prometheus_config_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: 0640
+  tags: [deploy]
+
+- name: Deploy Prometheus service
+  docker_compose:
+    project_src: "{{ prometheus_config_dir }}"
+    state: present
+  tags: [deploy]
+
+- name: Configure authentication for Prometheus
+  template:
+    src: prometheus/auth.conf.j2
+    dest: "{{ prometheus_config_dir }}/auth.conf"
+    owner: "{{ prometheus_user | default('prometheus') }}"
+    group: "{{ prometheus_group | default('prometheus') }}"
+    mode: 0640
+  when: prometheus_auth_enabled | bool
+  notify: restart_prometheus
+  tags: [security]
+
+- name: Configure network security for Prometheus
+  template:
+    src: prometheus/nginx.conf.j2
+    dest: "{{ prometheus_config_dir }}/nginx.conf"
+    owner: root
+    group: root
+    mode: 0640
+  when: prometheus_behind_proxy | bool
+  tags: [security]
+
+- name: Configure TLS for Prometheus
+  include_tasks: prometheus/tls.yml
+  when: prometheus_tls_enabled | bool
+  tags: [tls]

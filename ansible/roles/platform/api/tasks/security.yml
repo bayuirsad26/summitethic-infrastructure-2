@@ -1,0 +1,94 @@
+---
+# API security configuration
+
+- name: Configure API rate limiting
+  template:
+    src: security/rate-limit.conf.j2
+    dest: "{{ api_base_dir }}/config/rate-limit.conf"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  tags: [rate-limit]
+
+- name: Configure API CORS settings
+  template:
+    src: security/cors.conf.j2
+    dest: "{{ api_base_dir }}/config/cors.conf"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  tags: [cors]
+
+- name: Configure API authentication
+  template:
+    src: security/auth.conf.j2
+    dest: "{{ api_base_dir }}/config/auth.conf"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  no_log: true
+  tags: [auth]
+
+- name: Configure API data encryption
+  template:
+    src: security/encryption.conf.j2
+    dest: "{{ api_base_dir }}/config/encryption.conf"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  no_log: true
+  tags: [encryption]
+
+- name: Configure API security headers
+  template:
+    src: security/headers.conf.j2
+    dest: "{{ api_base_dir }}/config/headers.conf"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  tags: [headers]
+
+- name: Configure API content security policy
+  template:
+    src: security/csp.conf.j2
+    dest: "{{ api_base_dir }}/config/csp.conf"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  tags: [csp]
+
+- name: Create API audit logging directory
+  file:
+    path: "{{ api_base_dir }}/logs/audit"
+    state: directory
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0750
+  tags: [audit]
+
+- name: Configure API audit logging
+  template:
+    src: security/audit.conf.j2
+    dest: "{{ api_base_dir }}/config/audit.conf"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  tags: [audit]
+
+- name: Configure API environment isolation
+  template:
+    src: security/isolation.conf.j2
+    dest: "{{ api_base_dir }}/config/isolation.conf"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  tags: [isolation]
+
+- name: Configure API data access controls
+  template:
+    src: security/data-access.conf.j2
+    dest: "{{ api_base_dir }}/config/data-access.conf"
+    owner: "{{ api_user | default('summitethic') }}"
+    group: "{{ api_group | default('summitethic') }}"
+    mode: 0640
+  tags: [data-access]

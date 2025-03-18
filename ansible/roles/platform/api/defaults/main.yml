@@ -1,0 +1,62 @@
+---
+# Default variables for API role
+
+# Basic settings
+api_base_dir: "/opt/summitethic/api"
+api_user: "summitethic"
+api_group: "summitethic"
+api_image: "summitethic/api"
+api_version: "latest"
+api_environment: "production"
+api_internal_port: 3000
+api_external_port: 3000
+api_log_level: "info"
+
+# Security settings
+api_security_level: "high"
+api_allowed_origins: []
+api_rate_limit_window: 60000 # 60 seconds in milliseconds
+api_rate_limit_max: 100 # 100 requests per window
+api_use_local_certs: false
+api_tls_version: "1.3"
+api_encryption_algorithm: "AES-256-GCM"
+api_key_management: "environment variables with restricted access"
+
+# Database settings
+api_configure_database: true
+api_database_type: "postgres"
+api_use_external_db: false
+api_postgres_version: "14"
+api_mysql_version: "8.0"
+
+# Redis settings
+api_redis_enabled: true
+api_use_external_redis: false
+api_redis_version: "7.0"
+api_redis_maxmemory: "256mb"
+api_redis_maxmemory_policy: "allkeys-lru"
+
+# Scaling settings
+api_enable_scaling: false
+api_min_replicas: 1
+api_max_replicas: 5
+api_target_cpu_utilization: 70
+
+# Monitoring settings
+api_enable_monitoring: true
+api_prometheus_enabled: true
+api_tracing_enabled: false
+
+# Documentation settings
+api_generate_docs: true
+api_use_openapi: true
+api_openapi_version: "3.0.0"
+
+# Ethical settings
+api_data_retention_days: 90
+api_compliance_standards:
+  - GDPR
+  - CCPA
+api_data_protection_officer: "privacy@summitethic.com"
+api_security_contact: "security@summitethic.com"
+api_technical_lead: "tech@summitethic.com"

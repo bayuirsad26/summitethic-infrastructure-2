@@ -1,0 +1,52 @@
+# {{ ansible_managed }}
+# SummitEthic PostgreSQL HBA Configuration - Security Level: {{ security_level }}
+
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+{% if security_level == 'maximum' %}
+# Only secure connections with strong authentication
+local   all             postgres                                peer map=admin
+local   all             all                                     scram-sha-256
+host    all             all             127.0.0.1/32            scram-sha-256
+host    all             all             ::1/128                 scram-sha-256
+{% if postgres_allowed_hosts is defined and postgres_allowed_hosts %}
+{% for host in postgres_allowed_hosts %}
+host    all             all             {{ host }}              scram-sha-256
+{% endfor %}
+{% endif %}
+{% elif security_level == 'high' %}
+# Strong authentication for all connections
+local   all             postgres                                peer
+local   all             all                                     scram-sha-256
+host    all             all             127.0.0.1/32            scram-sha-256
+host    all             all             ::1/128                 scram-sha-256
+{% if postgres_allowed_hosts is defined and postgres_allowed_hosts %}
+{% for host in postgres_allowed_hosts %}
+host    all             all             {{ host }}              scram-sha-256
+{% endfor %}
+{% endif %}
+{% else %}
+# Default security configuration
+local   all             postgres                                peer
+local   all             all                                     md5
+host    all             all             127.0.0.1/32            md5
+host    all             all             ::1/128                 md5
+{% if postgres_allowed_hosts is defined and postgres_allowed_hosts %}
+{% for host in postgres_allowed_hosts %}
+host    all             all             {{ host }}              md5
+{% endfor %}
+{% endif %}
+{% endif %}
+
+# Replication connections (if enabled)
+{% if postgres_replication_enabled | bool %}
+local   replication     postgres                                peer
+host    replication     replication     127.0.0.1/32            scram-sha-256
+host    replication     replication     ::1/128                 scram-sha-256
+{% if postgres_replication_hosts is defined and postgres_replication_hosts %}
+{% for host in postgres_replication_hosts %}
+host    replication     replication     {{ host }}              scram-sha-256
+{% endfor %}
+{% endif %}
+{% endif %}
+
+# Deny all other connections by default (omitted entries are rejected)

@@ -1,0 +1,46 @@
+---
+# Handlers for database role
+
+- name: restart_postgres
+  service:
+    name: postgresql
+    state: restarted
+
+- name: reload_postgres
+  service:
+    name: postgresql
+    state: reloaded
+
+- name: restart_mysql
+  service:
+    name: mysql
+    state: restarted
+
+- name: reload_mysql
+  service:
+    name: mysql
+    state: reloaded
+
+- name: run_postgres_vacuum
+  become: true
+  become_user: postgres
+  command: vacuumdb --all --analyze
+  args:
+    warn: false
+
+- name: flush_postgresql_buffer_cache
+  become: true
+  become_user: postgres
+  command: psql -c "SELECT pg_drop_buffercache();"
+  args:
+    warn: false
+  when: postgres_contrib_installed | bool
+
+- name: rebuild_postgresql_indexes
+  become: true
+  become_user: postgres
+  command: psql -c "REINDEX DATABASE {{ item }};"
+  with_items: "{{ postgresql_databases }}"
+  args:
+    warn: false
+  when: postgresql_databases is defined

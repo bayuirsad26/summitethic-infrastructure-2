@@ -1,0 +1,94 @@
+# {{ ansible_managed }}
+# SummitEthic Prometheus Configuration
+
+global:
+  scrape_interval: {{ prometheus_scrape_interval | default('15s') }}
+  evaluation_interval: {{ prometheus_evaluation_interval | default('15s') }}
+  scrape_timeout: {{ prometheus_scrape_timeout | default('10s') }}
+
+  # Attach these labels to all time series collected
+  external_labels:
+    environment: {{ env | default('production') }}
+    region: {{ region | default('primary') }}
+    monitor: 'summitethic-monitoring'
+
+# Rule files
+rule_files:
+  - "rules/*.yml"
+  - "alerts/*.yml"
+
+# Alert manager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
+
+# Scrape configurations
+scrape_configs:
+  # Self monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+    # Ethical resource usage - limit series cardinality
+    sample_limit: 5000
+
+  # Node exporter for host metrics
+  - job_name: 'node'
+    file_sd_configs:
+      - files:
+          - 'targets/nodes.yml'
+        refresh_interval: 5m
+    scrape_interval: {{ prometheus_node_scrape_interval | default('30s') }}
+    # Ethical monitoring - respect privacy by limiting collection
+    params:
+      collect[]:
+        - cpu
+        - meminfo
+        - diskstats
+        - filesystem
+        - netdev
+        - loadavg
+        - uname
+        - time
+
+  # Docker metrics
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    # Ethical resource monitoring
+    metric_relabel_configs:
+      # Filter out high-cardinality metrics
+      - source_labels: [__name__]
+        regex: 'container_.*_(usage|total)$'
+        action: keep
+
+  # API service metrics
+  - job_name: 'api'
+    file_sd_configs:
+      - files:
+          - 'targets/apis.yml'
+        refresh_interval: 5m
+    metrics_path: /metrics
+    # Ethical API monitoring - avoid collecting sensitive data
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: '.*_password.*|.*_secret.*|.*_token.*'
+        action: drop
+
+  # Database metrics
+  - job_name: 'database'
+    file_sd_configs:
+      - files:
+          - 'targets/databases.yml'
+        refresh_interval: 5m
+    # Ethical database monitoring - focus on performance, not content
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'pg_stat_user_tables.*'
+        action: drop
+
+{% if prometheus_extra_scrape_configs is defined %}
+{{ prometheus_extra_scrape_configs | indent(2) }}
+{% endif %}

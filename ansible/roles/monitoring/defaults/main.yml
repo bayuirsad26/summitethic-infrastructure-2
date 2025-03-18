@@ -1,0 +1,79 @@
+---
+# Default variables for monitoring role
+
+# Prometheus settings
+prometheus_version: "v2.43.0"
+prometheus_user: "prometheus"
+prometheus_group: "prometheus"
+prometheus_config_dir: "/etc/prometheus"
+prometheus_data_dir: "/var/lib/prometheus"
+prometheus_web_listen_address: "0.0.0.0:9090"
+prometheus_storage_retention: "15d"
+prometheus_scrape_interval: "15s"
+prometheus_evaluation_interval: "15s"
+prometheus_scrape_timeout: "10s"
+prometheus_node_scrape_interval: "30s"
+prometheus_app_scrape_interval: "15s"
+prometheus_system_metrics_retention: "30d"
+prometheus_application_metrics_retention: "15d"
+prometheus_user_metrics_retention: "7d"
+prometheus_security_metrics_retention: "90d"
+prometheus_auth_enabled: true
+prometheus_behind_proxy: true
+prometheus_tls_enabled: true
+
+# Alertmanager settings
+alertmanager_version: "v0.25.0"
+alertmanager_user: "alertmanager"
+alertmanager_group: "alertmanager"
+alertmanager_config_dir: "/etc/alertmanager"
+alertmanager_data_dir: "/var/lib/alertmanager"
+alertmanager_web_listen_address: "0.0.0.0:9093"
+alertmanager_resolve_timeout: "5m"
+alertmanager_smtp_enabled: true
+alertmanager_slack_enabled: true
+alertmanager_pagerduty_enabled: false
+
+# Grafana settings
+grafana_version: "9.5.1"
+grafana_user: "grafana"
+grafana_group: "grafana"
+grafana_config_dir: "/etc/grafana"
+grafana_data_dir: "/var/lib/grafana"
+grafana_admin_user: "admin"
+grafana_domain: "monitoring.summitethic.com"
+grafana_anonymous_access: false
+grafana_disable_sanitize_html: false
+grafana_install_plugins: []
+
+# Node exporter settings
+node_exporter_version: "v1.5.0"
+node_exporter_user: "node_exporter"
+node_exporter_group: "node_exporter"
+node_exporter_web_listen_address: "0.0.0.0:9100"
+node_exporter_collectors_enabled:
+  - cpu
+  - diskstats
+  - filesystem
+  - loadavg
+  - meminfo
+  - netdev
+  - stat
+  - time
+  - uname
+node_exporter_collectors_disabled:
+  - wifi # Privacy implications
+  - arp # Could expose network details
+  - netstat # Could expose connection details
+
+# cAdvisor settings
+cadvisor_version: "v0.45.0"
+cadvisor_web_listen_address: "0.0.0.0:8080"
+
+# Ethical settings
+ethical_monitoring_enabled: true
+user_data_access_threshold: 100
+monitoring_lead: "monitoring@summitethic.com"
+security_contact: "security@summitethic.com"
+ethics_officer: "ethics@summitethic.com"
+support_team: "support@summitethic.com"
