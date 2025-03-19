@@ -1,0 +1,17 @@
+---
+# Root setup role handlers
+
+- name: restart_ssh
+  service:
+    name: "{{ 'ssh' if ansible_os_family == 'Debian' else 'sshd' }}"
+    state: restarted
+
+- name: reboot_if_needed
+  reboot:
+    reboot_timeout: "{{ reboot_timeout }}"
+    test_command: uptime
+  when: reboot_if_needed | bool
+
+- name: update_hostname
+  command: hostname {{ hostname }}
+  changed_when: false

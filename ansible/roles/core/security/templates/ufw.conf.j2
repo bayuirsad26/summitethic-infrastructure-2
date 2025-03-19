@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# SummitEthic UFW Configuration
+
+# Set to yes to start on boot
+ENABLED=yes
+
+# Set to yes to enable logging
+LOGLEVEL={{ firewall_logging }}
+
+# Default policy (allow/deny)
+DEFAULT_INPUT_POLICY={{ firewall_default_incoming_policy }}
+DEFAULT_OUTPUT_POLICY={{ firewall_default_outgoing_policy }}
+DEFAULT_FORWARD_POLICY=DROP
+
+# Set to yes for IPv6 support
+IPV6={{ 'yes' if common_network.disable_ipv6 is defined and not common_network.disable_ipv6 else 'no' }}

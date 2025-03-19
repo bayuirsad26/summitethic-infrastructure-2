@@ -1,0 +1,52 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# SummitEthic Docker security scanner results parser
+
+LOG_FILE=$1
+
+if [ -z "$LOG_FILE" ] || [ ! -f "$LOG_FILE" ]; then
+    echo "Usage: $0 <docker-bench-security-log-file>"
+    exit 1
+fi
+
+# Extract overall results
+TOTAL_CHECKS=$(grep -c "\[WARN\]\\|\[PASS\]\\|\[INFO\]\\|\[NOTE\]" "$LOG_FILE")
+WARNINGS=$(grep -c "\[WARN\]" "$LOG_FILE")
+PASSED=$(grep -c "\[PASS\]" "$LOG_FILE")
+INFO=$(grep -c "\[INFO\]" "$LOG_FILE")
+NOTES=$(grep -c "\[NOTE\]" "$LOG_FILE")
+
+# Calculate score
+if [ $TOTAL_CHECKS -gt 0 ]; then
+    SCORE=$(( ($PASSED * 100) / $TOTAL_CHECKS ))
+else
+    SCORE=0
+fi
+
+# Extract all warnings
+WARN_LIST=$(grep "\[WARN\]" "$LOG_FILE" | sed 's/\[WARN\] //')
+
+# Create JSON output
+cat << EOF
+{
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "hostname": "$(hostname)",
+  "summary": {
+    "total_checks": $TOTAL_CHECKS,
+    "warnings": $WARNINGS,
+    "passed": $PASSED,
+    "info": $INFO,
+    "notes": $NOTES,
+    "score": $SCORE
+  },
+  "warnings": [
+$(echo "$WARN_LIST" | awk '{print "    \"" $0 "\","}' | sed '$s/,$//')
+  ],
+  "report_file": "$LOG_FILE",
+  "ethical_assessment": {
+    "rating": "$([ $SCORE -ge 80 ] && echo "good" || echo "needs_improvement")",
+    "ethical_impact": "Security vulnerabilities may expose sensitive data and compromise user privacy.",
+    "improvement_priorities": "Address container security warnings to maintain ethical standards."
+  }
+}
+EOF

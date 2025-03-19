@@ -1,0 +1,32 @@
+---
+# Configure and perform system updates
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+  tags: [updates]
+
+- name: Check if a reboot is required
+  stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+  when: ansible_os_family == "Debian"
+  tags: [updates]
+
+- name: Upgrade all packages if enabled
+  apt:
+    upgrade: dist
+  when: ansible_os_family == "Debian" and perform_system_updates | bool
+  register: upgrade_result
+  tags: [updates]
+
+- name: Reboot system if required
+  reboot:
+    reboot_timeout: "{{ reboot_timeout }}"
+    msg: "Reboot initiated by Ansible for system updates"
+  when: >
+    (reboot_required.stat.exists or upgrade_result.changed) and 
+    reboot_if_needed | bool
+  tags: [updates, reboot]

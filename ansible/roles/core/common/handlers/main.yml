@@ -1,0 +1,31 @@
+---
+# Common role handlers
+
+- name: restart_timesyncd
+  service:
+    name: systemd-timesyncd
+    state: restarted
+  when: ansible_service_mgr == "systemd"
+
+- name: reload_sysctl
+  command: sysctl --system
+  args:
+    warn: false
+
+- name: restart_dbus
+  service:
+    name: dbus
+    state: restarted
+  when: ansible_service_mgr == "systemd"
+
+- name: update_timezone
+  command: dpkg-reconfigure --frontend noninteractive tzdata
+  args:
+    warn: false
+  when: ansible_os_family == "Debian"
+
+- name: update_locales
+  command: dpkg-reconfigure --frontend noninteractive locales
+  args:
+    warn: false
+  when: ansible_os_family == "Debian"

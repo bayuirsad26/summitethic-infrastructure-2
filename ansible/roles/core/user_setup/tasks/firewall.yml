@@ -1,0 +1,39 @@
+---
+# Firewall configuration specific to users
+
+- name: Apply UFW rules for users
+  ufw:
+    rule: "{{ item.policy }}"
+    direction: "{{ item.direction }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    comment: "{{ item.comment | default('') }}"
+  with_items: "{{ user_firewall_rules }}"
+  when: ansible_os_family == "Debian"
+  notify: reload_ufw
+  tags: [firewall]
+
+- name: Apply FirewallD rules for users
+  firewalld:
+    port: "{{ item.port }}/{{ item.proto | default('tcp') }}"
+    permanent: yes
+    state: "{{ 'enabled' if item.policy == 'allow' else 'disabled' }}"
+    immediate: yes
+  with_items: "{{ user_firewall_rules }}"
+  when: ansible_os_family == "RedHat"
+  notify: reload_firewalld
+  tags: [firewall]
+
+- name: Set default incoming policy
+  ufw:
+    direction: incoming
+    policy: deny
+  when: ansible_os_family == "Debian"
+  tags: [firewall]
+
+- name: Set default outgoing policy
+  ufw:
+    direction: outgoing
+    policy: allow
+  when: ansible_os_family == "Debian"
+  tags: [firewall]

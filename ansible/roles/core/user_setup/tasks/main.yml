@@ -1,0 +1,57 @@
+---
+# User setup role main tasks
+
+- name: Include SSH setup tasks
+  include_tasks: ssh.yml
+  when: setup_ssh_keys | bool
+  tags: [ssh]
+
+- name: Include firewall rules for users
+  include_tasks: firewall.yml
+  tags: [firewall]
+
+- name: Include Docker user configuration
+  include_tasks: docker.yml
+  when: enable_docker_user_group | bool and
+    (ansible_facts.packages['docker-ce'] is defined or
+    ansible_facts.packages.docker is defined or
+    ansible_facts.packages['docker.io'] is defined)
+  tags: [docker]
+
+- name: Include swap configuration
+  include_tasks: swap.yml
+  when: setup_swap | bool
+  tags: [swap]
+
+- name: Set up user environment
+  template:
+    src: bash_profile.j2
+    dest: "/home/{{ ansible_user }}/.bash_profile"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: 0644
+  tags: [dotfiles]
+
+- name: Install dotfiles
+  copy:
+    src: "dot_files/{{ item }}"
+    dest: "/home/{{ ansible_user }}/.{{ item }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: 0644
+  with_items:
+    - "bashrc"
+    - "vimrc"
+    - "gitconfig"
+    - "tmux.conf"
+  tags: [dotfiles]
+
+- name: Configure fail2ban for SSH protection
+  copy:
+    src: fail2ban.jail.local
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart_fail2ban
+  tags: [security]

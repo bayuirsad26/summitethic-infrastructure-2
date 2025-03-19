@@ -1,0 +1,48 @@
+# SummitEthic .bashrc configuration
+
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+
+# History control
+HISTCONTROL=ignoreboth
+HISTSIZE=10000
+HISTFILESIZE=20000
+shopt -s histappend
+shopt -s checkwinsize
+
+# Make less more friendly for non-text input files
+[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+
+# Prompt
+PS1='\[\033[38;5;45m\]\u\[\033[0m\]@\[\033[38;5;33m\]\h\[\033[0m\]:\[\033[38;5;214m\]\w\[\033[0m\]\\$ '
+
+# Enable color support
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias ls='ls --color=auto'
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
+
+# Aliases
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+
+# Load Docker completion
+if [ -f ~/.docker-completion.sh ]; then
+    . ~/.docker-completion.sh
+fi
+
+# Load local configurations
+if [ -f ~/.bash_local ]; then
+    . ~/.bash_local
+fi
+
+# Add local bin to path
+export PATH=$PATH:$HOME/bin

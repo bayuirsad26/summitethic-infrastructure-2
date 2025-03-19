@@ -1,0 +1,14 @@
+---
+# Configure system hostname
+
+- name: Set system hostname
+  hostname:
+    name: "{{ hostname }}"
+  notify: update_hostname
+
+- name: Update /etc/hosts with hostname
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1'
+    line: "127.0.1.1 {{ hostname }}"
+    state: present

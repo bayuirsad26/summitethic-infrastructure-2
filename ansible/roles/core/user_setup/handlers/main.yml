@@ -1,0 +1,21 @@
+---
+# User setup role handlers
+
+- name: restart_ssh
+  service:
+    name: "{{ 'ssh' if ansible_os_family == 'Debian' else 'sshd' }}"
+    state: restarted
+
+- name: restart_fail2ban
+  service:
+    name: fail2ban
+    state: restarted
+
+- name: reload_ufw
+  ufw:
+    state: reloaded
+  when: ansible_os_family == "Debian"
+
+- name: reload_firewalld
+  command: firewall-cmd --reload
+  when: ansible_os_family == "RedHat"

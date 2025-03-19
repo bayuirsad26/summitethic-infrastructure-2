@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# SummitEthic Docker syslog configuration
+
+if $programname startswith 'docker' then {
+    /var/log/docker/docker.log
+    stop
+}
+
+if $programname == 'dockerd' then {
+    /var/log/docker/dockerd.log
+    stop
+}
+
+if $syslogtag startswith 'docker/' then {
+    /var/log/docker/containers.log
+    stop
+}

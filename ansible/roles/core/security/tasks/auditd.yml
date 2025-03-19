@@ -1,0 +1,52 @@
+---
+# Configure audit daemon for security monitoring
+
+- name: Install auditd
+  package:
+    name: auditd
+    state: present
+  tags: [audit]
+
+- name: Configure auditd
+  template:
+    src: auditd.conf.j2
+    dest: /etc/audit/auditd.conf
+    owner: root
+    group: root
+    mode: 0640
+  notify: restart_auditd
+  tags: [audit]
+
+- name: Configure audit rules
+  copy:
+    src: audit.rules
+    dest: /etc/audit/rules.d/summitethic.rules
+    owner: root
+    group: root
+    mode: 0640
+  notify: restart_auditd
+  tags: [audit, rules]
+
+- name: Check if remote audit server is configured
+  debug:
+    msg: "Configuring remote audit logging to {{ audit_remote_server }}"
+  when: audit_remote_server | length > 0
+  tags: [audit]
+
+- name: Configure remote audit logging
+  template:
+    src: audisp-remote.conf.j2
+    dest: /etc/audisp/audisp-remote.conf
+    owner: root
+    group: root
+    mode: 0640
+  when: audit_remote_server | length > 0
+  notify: restart_auditd
+  tags: [audit, remote]
+
+- name: Enable audit service
+  service:
+    name: auditd
+    state: started
+    enabled: yes
+  tags: [audit]

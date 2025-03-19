@@ -1,0 +1,64 @@
+---
+# Configure PAM security settings
+
+- name: Install PAM modules
+  package:
+    name:
+      - libpam-pwquality
+      - libpam-modules
+    state: present
+  tags: [pam]
+
+- name: Configure PAM password quality
+  template:
+    src: pam.d/common-password.j2
+    dest: /etc/pam.d/common-password
+    owner: root
+    group: root
+    mode: 0644
+  tags: [pam, password]
+
+- name: Configure PAM authentication
+  template:
+    src: pam.d/common-auth.j2
+    dest: /etc/pam.d/common-auth
+    owner: root
+    group: root
+    mode: 0644
+  tags: [pam, auth]
+
+- name: Set account lockout parameters
+  template:
+    src: pam.d/common-account.j2
+    dest: /etc/pam.d/common-account
+    owner: root
+    group: root
+    mode: 0644
+  tags: [pam, account]
+
+- name: Configure PAM session limits
+  template:
+    src: pam.d/common-session.j2
+    dest: /etc/pam.d/common-session
+    owner: root
+    group: root
+    mode: 0644
+  tags: [pam, session]
+
+- name: Configure PAM session limits (non-interactive)
+  template:
+    src: pam.d/common-session-noninteractive.j2
+    dest: /etc/pam.d/common-session-noninteractive
+    owner: root
+    group: root
+    mode: 0644
+  tags: [pam, session]
+
+- name: Set login defs
+  template:
+    src: login.defs.j2
+    dest: /etc/login.defs
+    owner: root
+    group: root
+    mode: 0644
+  tags: [pam, login]

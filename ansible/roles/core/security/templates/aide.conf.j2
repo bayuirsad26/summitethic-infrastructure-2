@@ -1,0 +1,73 @@
+# {{ ansible_managed }}
+# SummitEthic AIDE Configuration
+
+# AIDE configuration
+@@define DBDIR /var/lib/aide
+@@define LOGDIR /var/log/aide
+
+# The location of the database to be read.
+database=file:@@{DBDIR}/aide.db
+
+# The location of the database to be written.
+database_out=file:@@{DBDIR}/aide.db.new
+
+# Whether to gzip the output to database
+gzip_dbout=yes
+
+# Set to no to disable report summarization
+summarize=yes
+
+# Set to no to disable grouping of files in report
+grouped=yes
+
+# Set verbosity level
+verbose=5
+
+# Set to yes to print detailed information about added or removed files
+report_detailed_init=yes
+
+# Set to yes to log added files
+report_adds=yes
+
+# Set to yes to log removed files
+report_removed=yes
+
+# Set to yes to log changed files
+report_changed=yes
+
+# Where to send the output. Multiple options can be used.
+report_url=stdout
+report_url=file:@@{LOGDIR}/aide.log
+
+# Rule definitions
+ALLXTRAHASHES = sha1+rmd160+sha256+sha512+tiger
+DATAONLY = p+n+u+g+s+m+c+acl+selinux+xattrs
+EVERYTHING = p+i+n+u+g+s+m+c+acl+selinux+xattrs+sha1+rmd160+sha256+sha512+tiger
+
+# What to check and how
+/boot   EVERYTHING
+/bin    EVERYTHING
+/sbin   EVERYTHING
+/lib    EVERYTHING
+/lib64  EVERYTHING
+/opt    EVERYTHING
+/usr    EVERYTHING
+/root   EVERYTHING
+/etc    EVERYTHING
+
+# Exclude temporary files and mounted filesystems
+!/var/lib/aide/aide.db
+!/var/lib/aide/aide.db.new
+!/var/log/aide/
+!/mnt
+!/media
+!/tmp
+!/proc
+!/sys
+!/run
+!/dev
+!/var/tmp
+!/var/log
+!/var/spool/
+!/var/cache/
+!/home

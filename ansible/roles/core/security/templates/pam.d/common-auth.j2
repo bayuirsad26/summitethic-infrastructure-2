@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# SummitEthic PAM configuration for authentication
+
+# Auth settings
+auth    required            pam_unix.so nullok_secure
+auth    required            pam_faillock.so preauth silent audit deny={{ account_lockout_attempts }} unlock_time=1800
+auth    [success=1 default=bad]      pam_unix.so
+auth    [default=die]       pam_faillock.so authfail audit deny={{ account_lockout_attempts }} unlock_time=1800
+auth    sufficient          pam_faillock.so authsucc audit deny={{ account_lockout_attempts }} unlock_time=1800
+auth    requisite           pam_deny.so
+auth    required            pam_permit.so
+auth    optional            pam_cap.so

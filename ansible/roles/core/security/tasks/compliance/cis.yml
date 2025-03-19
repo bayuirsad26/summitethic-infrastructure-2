@@ -1,0 +1,54 @@
+---
+# CIS Benchmark compliance checks
+
+- name: Run CIS compliance checks
+  security_check:
+    target: "/etc/ssh/sshd_config"
+    scan_type: "config"
+    ethical_level: "{{ 'strict' if security_level == 'maximum' else 'standard' }}"
+    compliance_standards:
+      - cis
+  register: ssh_compliance
+  tags: [compliance, cis, ssh]
+
+- name: Run CIS file permission checks
+  security_check:
+    target: "/etc/passwd"
+    scan_type: "permissions"
+    ethical_level: "{{ 'strict' if security_level == 'maximum' else 'standard' }}"
+    compliance_standards:
+      - cis
+  register: file_compliance
+  tags: [compliance, cis, files]
+
+- name: Run CIS network security checks
+  security_check:
+    target: "{{ ansible_default_ipv4.interface }}"
+    scan_type: "network"
+    ethical_level: "{{ 'strict' if security_level == 'maximum' else 'standard' }}"
+    compliance_standards:
+      - cis
+  register: network_compliance
+  tags: [compliance, cis, network]
+
+- name: Store CIS compliance results
+  set_fact:
+    cis_compliance_results:
+      cis_ssh: "{{ ssh_compliance }}"
+      cis_files: "{{ file_compliance }}"
+      cis_network: "{{ network_compliance }}"
+  tags: [compliance, cis]
+
+- name: Generate CIS compliance summary
+  set_fact:
+    cis_compliance_summary:
+      ssh_score: "{{ ssh_compliance.score }}"
+      file_score: "{{ file_compliance.score }}"
+      network_score: "{{ network_compliance.score }}"
+      overall_score: "{{ (ssh_compliance.score + file_compliance.score + network_compliance.score) / 3 }}"
+      high_severity_issues:
+        "{{ (ssh_compliance.issues | selectattr('severity', 'equalto', 'high') | list | length) +
+        (file_compliance.issues | selectattr('severity', 'equalto', 'high') | list | length) +
+        (network_compliance.issues | selectattr('severity', 'equalto', 'high') | list | length) }}"
+      status: "{{ 'compliant' if ((ssh_compliance.score + file_compliance.score + network_compliance.score) / 3) >= 90 else 'non_compliant' }}"
+  tags: [compliance, cis]

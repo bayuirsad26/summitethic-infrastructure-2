@@ -1,0 +1,48 @@
+---
+# SSH configuration for users
+
+- name: Ensure SSH directory exists
+  file:
+    path: "/home/{{ ansible_user }}/.ssh"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: 0700
+  tags: [ssh]
+
+- name: Check if SSH key already exists
+  stat:
+    path: "/home/{{ ansible_user }}/.ssh/id_{{ ssh_key_type }}"
+  register: ssh_key_exists
+  tags: [ssh]
+
+- name: Generate SSH key pair
+  command: >
+    ssh-keygen -t {{ ssh_key_type }} -b {{ ssh_key_size }} -f "/home/{{ ansible_user }}/.ssh/id_{{ ssh_key_type }}" -q -N ""
+  become: yes
+  become_user: "{{ ansible_user }}"
+  when: not ssh_key_exists.stat.exists or regenerate_ssh_key | bool
+  args:
+    creates: "/home/{{ ansible_user }}/.ssh/id_{{ ssh_key_type }}"
+  tags: [ssh]
+
+- name: Set proper permissions on SSH files
+  file:
+    path: "/home/{{ ansible_user }}/.ssh/{{ item }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "{{ '0600' if item != 'id_{{ ssh_key_type }}.pub' else '0644' }}"
+  with_items:
+    - "id_{{ ssh_key_type }}"
+    - "id_{{ ssh_key_type }}.pub"
+  when: ssh_key_exists.stat.exists or regenerate_ssh_key | bool
+  tags: [ssh]
+
+- name: Copy SSH configuration
+  template:
+    src: ssh_config.j2
+    dest: "/home/{{ ansible_user }}/.ssh/config"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: 0600
+  tags: [ssh]

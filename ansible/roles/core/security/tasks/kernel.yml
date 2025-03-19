@@ -1,0 +1,59 @@
+---
+# Configure kernel security parameters
+
+- name: Configure sysctl security parameters
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  with_items:
+    # Network security
+    - { name: "net.ipv4.conf.all.accept_redirects", value: "0" }
+    - { name: "net.ipv4.conf.default.accept_redirects", value: "0" }
+    - { name: "net.ipv4.conf.all.accept_source_route", value: "0" }
+    - { name: "net.ipv4.conf.default.accept_source_route", value: "0" }
+    - { name: "net.ipv4.conf.all.log_martians", value: "1" }
+    - { name: "net.ipv4.conf.default.log_martians", value: "1" }
+    - { name: "net.ipv4.icmp_echo_ignore_broadcasts", value: "1" }
+    - { name: "net.ipv4.icmp_ignore_bogus_error_responses", value: "1" }
+    - { name: "net.ipv4.ip_forward", value: "0" }
+    - { name: "net.ipv4.conf.all.rp_filter", value: "1" }
+    - { name: "net.ipv4.conf.default.rp_filter", value: "1" }
+    - { name: "net.ipv4.tcp_syncookies", value: "1" }
+    # Kernel hardening
+    - { name: "kernel.randomize_va_space", value: "2" }
+    - { name: "kernel.kptr_restrict", value: "2" }
+    - { name: "kernel.dmesg_restrict", value: "1" }
+    - { name: "fs.protected_hardlinks", value: "1" }
+    - { name: "fs.protected_symlinks", value: "1" }
+    - { name: "kernel.sysrq", value: "0" }
+    - { name: "kernel.yama.ptrace_scope", value: "1" }
+  when: security_level != 'low'
+  tags: [kernel, sysctl]
+
+- name: Configure additional maximum security sysctl parameters
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  with_items:
+    - { name: "kernel.exec-shield", value: "1" }
+    - { name: "kernel.shmmax", value: "68719476736" }
+    - { name: "kernel.shmall", value: "4294967296" }
+    - { name: "net.ipv6.conf.all.disable_ipv6", value: "1" }
+    - { name: "net.ipv6.conf.default.disable_ipv6", value: "1" }
+    - { name: "net.ipv6.conf.lo.disable_ipv6", value: "1" }
+  when: security_level == 'maximum'
+  tags: [kernel, sysctl]
+
+- name: Configure AppArmor
+  service:
+    name: apparmor
+    state: started
+    enabled: yes
+  when:
+    - security_level == 'high' or security_level == 'maximum'
+    - ansible_os_family == 'Debian'
+  tags: [kernel, apparmor]

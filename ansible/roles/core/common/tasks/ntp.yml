@@ -1,0 +1,48 @@
+---
+# Configure time synchronization using systemd-timesyncd
+
+- name: Install NTP packages
+  package:
+    name: systemd-timesyncd
+    state: present
+  when: ansible_service_mgr == "systemd"
+  tags: [ntp]
+
+- name: Configure timesyncd
+  template:
+    src: timesyncd.conf.j2
+    dest: /etc/systemd/timesyncd.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart_timesyncd
+  when: ansible_service_mgr == "systemd"
+  tags: [ntp]
+
+- name: Enable and start timesyncd
+  service:
+    name: systemd-timesyncd
+    state: started
+    enabled: yes
+  when: ansible_service_mgr == "systemd"
+  tags: [ntp]
+
+- name: Set timezone
+  timezone:
+    name: "{{ common_timezone }}"
+  notify: update_timezone
+  tags: [ntp, timezone]
+
+- name: Ensure locales are generated
+  locale_gen:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ common_locale_gen }}"
+  when: ansible_os_family == "Debian"
+  tags: [locale]
+
+- name: Set system locale
+  command: update-locale LANG={{ common_locale }} LC_ALL={{ common_locale }}
+  when: ansible_os_family == "Debian"
+  tags: [locale]
+  changed_when: false

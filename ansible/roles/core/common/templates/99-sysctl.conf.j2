@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+# SummitEthic sysctl parameters for performance and security optimization
+
+# Network optimization
+{% for item in sysctl_settings %}
+{{ item.name }} = {{ item.value }}
+{% endfor %}

@@ -1,0 +1,31 @@
+---
+# User setup role default variables
+
+# User management
+user_groups:
+  - sudo
+  - docker
+default_shell: "/bin/bash"
+
+# SSH configuration
+setup_ssh_keys: true
+ssh_key_type: "ed25519"
+ssh_key_size: 4096
+regenerate_ssh_key: false
+
+# Firewall settings for users
+user_firewall_rules:
+  - direction: incoming
+    policy: deny
+    port: 4444
+    comment: "Block access to non-standard SSH ports"
+
+# Docker user setup
+docker_users:
+  - "{{ ansible_user }}"
+enable_docker_user_group: true
+
+# Swap configuration
+setup_swap: true
+swap_size_mb: 2048
+swap_swappiness: 10

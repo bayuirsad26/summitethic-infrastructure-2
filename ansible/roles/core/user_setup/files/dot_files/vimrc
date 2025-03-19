@@ -1,0 +1,50 @@
+" SummitEthic vim configuration
+
+" Basic settings
+syntax on
+set number
+set ruler
+set autoindent
+set smartindent
+set tabstop=4
+set shiftwidth=4
+set expandtab
+set background=dark
+set hlsearch
+set incsearch
+set ignorecase
+set smartcase
+set backspace=indent,eol,start
+set showmatch
+set wildmenu
+set history=1000
+
+" Security features
+set nomodeline
+set secure
+
+" Disable backup files
+set nobackup
+set noswapfile
+
+" Enable file type detection and plugin loading
+filetype plugin indent on
+
+" Display line at column 80
+set colorcolumn=80
+
+" Status line
+set laststatus=2
+set statusline=%F%m%r%h%w\ [FORMAT=%{&ff}]\ [TYPE=%Y]\ [POS=%l,%v][%p%%]\ [LEN=%L]
+set showcmd
+
+" Key mappings
+nnoremap <silent> <F5> :set invpaste paste?<CR>
+nnoremap <C-n> :next<CR>
+nnoremap <C-p> :prev<CR>
+
+" Detect YAML files for 2 space indentation
+autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
+
+" For security purposes: limit what .vimrc in current directory can do
+set secure

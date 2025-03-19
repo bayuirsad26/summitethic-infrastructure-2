@@ -1,0 +1,91 @@
+---
+# Docker Swarm configuration
+
+- name: Check if Swarm is already initialized
+  shell: docker info | grep -i 'swarm:' | grep -v 'inactive'
+  register: swarm_check
+  changed_when: false
+  failed_when: false
+  tags: [swarm]
+
+- name: Initialize Swarm cluster
+  command: >
+    docker swarm init
+    --advertise-addr {{ swarm_advertise_addr }}
+    --listen-addr {{ swarm_listen_addr }}
+  when:
+    - swarm_init | bool
+    - swarm_check.rc != 0
+    - swarm_manager | bool
+  register: swarm_init_result
+  tags: [swarm]
+
+- name: Get Swarm manager join token
+  command: docker swarm join-token -q manager
+  register: swarm_manager_token
+  changed_when: false
+  when:
+    - swarm_manager | bool
+    - swarm_init_result is success or swarm_check.rc == 0
+  tags: [swarm]
+
+- name: Get Swarm worker join token
+  command: docker swarm join-token -q worker
+  register: swarm_worker_token
+  changed_when: false
+  when:
+    - swarm_manager | bool
+    - swarm_init_result is success or swarm_check.rc == 0
+  tags: [swarm]
+
+- name: Join Swarm cluster as manager
+  command: >
+    docker swarm join
+    --token {{ hostvars[groups['swarm_managers'][0]]['swarm_manager_token']['stdout'] }}
+    {{ hostvars[groups['swarm_managers'][0]]['ansible_default_ipv4']['address'] }}:2377
+  when:
+    - swarm_manager | bool
+    - not swarm_init | bool
+    - swarm_check.rc != 0
+    - groups['swarm_managers'] is defined
+    - groups['swarm_managers'] | length > 0
+    - inventory_hostname != groups['swarm_managers'][0]
+  tags: [swarm]
+
+- name: Join Swarm cluster as worker
+  command: >
+    docker swarm join
+    --token {{ hostvars[groups['swarm_managers'][0]]['swarm_worker_token']['stdout'] }}
+    {{ hostvars[groups['swarm_managers'][0]]['ansible_default_ipv4']['address'] }}:2377
+  when:
+    - swarm_worker | bool
+    - swarm_check.rc != 0
+    - groups['swarm_managers'] is defined
+    - groups['swarm_managers'] | length > 0
+  tags: [swarm]
+
+- name: Configure Swarm firewall rules
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  with_items:
+    - 2377 # Swarm cluster management
+    - 7946 # Swarm node-to-node communication
+    - 4789 # Swarm overlay network
+  when:
+    - ansible_os_family == "Debian"
+    - swarm_manager | bool or swarm_worker | bool
+  notify: reload_ufw
+  tags: [swarm, firewall]
+
+- name: Configure Docker daemon for Swarm
+  template:
+    src: daemon-swarm.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart_docker
+  when: swarm_manager | bool or swarm_worker | bool
+  tags: [swarm]

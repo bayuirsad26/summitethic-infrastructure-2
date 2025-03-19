@@ -1,0 +1,49 @@
+---
+# Container orchestration role default variables
+
+# Docker configuration
+docker_version: "20.10"
+docker_compose_version: "v2.15.1"
+docker_users: []
+docker_daemon_config_file: /etc/docker/daemon.json
+
+# Container orchestration type
+orchestration_type: "swarm" # Options: swarm, kubernetes
+
+# Docker daemon settings
+docker_log_driver: "json-file"
+docker_log_max_size: "20m"
+docker_log_max_file: "5"
+docker_icc: false
+docker_userns_remap: "default"
+docker_live_restore: true
+docker_userland_proxy: false
+docker_no_new_privileges: true
+docker_storage_driver: "overlay2"
+docker_ulimit_nofile_hard: 64000
+docker_ulimit_nofile_soft: 32000
+docker_experimental: false
+docker_buildkit: true
+docker_metrics_addr: "127.0.0.1:9323"
+
+# Docker registry mirrors (optional)
+docker_registry_mirrors: []
+
+# Docker Swarm configuration
+swarm_init: false
+swarm_manager: false
+swarm_worker: false
+swarm_advertise_addr: "{{ ansible_default_ipv4.address }}"
+swarm_listen_addr: "0.0.0.0:2377"
+
+# Kubernetes configuration
+kubernetes_version: "1.26.0"
+kubernetes_init: false
+kubernetes_master: false
+kubernetes_worker: false
+kubernetes_pod_network_cidr: "10.244.0.0/16"
+kubernetes_apiserver_advertise_address: "{{ ansible_default_ipv4.address }}"
+kubernetes_cni: "flannel" # Options: flannel, calico, weave
+
+# Enable Docker security bench
+docker_security_bench: true

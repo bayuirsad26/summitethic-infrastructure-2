@@ -1,0 +1,58 @@
+---
+# Root setup role main tasks
+
+- name: Set hostname
+  include_tasks: hostname.yml
+  when: set_hostname | bool
+  tags: [hostname]
+
+- name: Check if this is first run
+  stat:
+    path: /etc/summitethic/.bootstrap_complete
+  register: bootstrap_complete
+  tags: [always]
+
+- name: Display bootstrap status
+  debug:
+    msg: "Starting initial system bootstrap process"
+  when: not bootstrap_complete.stat.exists
+  tags: [always]
+
+- name: Install required packages
+  package:
+    name: "{{ bootstrap_packages }}"
+    state: present
+  tags: [packages]
+
+- name: Create system directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  with_items: "{{ system_directories }}"
+  tags: [directories]
+
+- name: Configure system updates
+  include_tasks: updates.yml
+  tags: [updates]
+
+- name: Create administrative user
+  include_tasks: user_creation.yml
+  when: admin_user | length > 0
+  tags: [user]
+
+- name: Configure SSH
+  include_tasks: ssh_config.yml
+  tags: [ssh]
+
+- name: Mark bootstrap as complete
+  file:
+    path: /etc/summitethic/.bootstrap_complete
+    state: touch
+    owner: root
+    group: root
+    mode: 0644
+  when: not bootstrap_complete.stat.exists
+  tags: [always]

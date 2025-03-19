@@ -1,0 +1,68 @@
+---
+# Basic security configurations for all servers
+
+- name: Set password policy requirements
+  lineinfile:
+    path: /etc/login.defs
+    regexp: "^{{ item.option }}"
+    line: "{{ item.option }} {{ item.value }}"
+    state: present
+  with_items:
+    - { option: "PASS_MAX_DAYS", value: "90" }
+    - { option: "PASS_MIN_DAYS", value: "1" }
+    - { option: "PASS_WARN_AGE", value: "7" }
+  tags: [security, login]
+
+- name: Apply resource limits
+  template:
+    src: limits.conf.j2
+    dest: /etc/security/limits.d/99-summitethic.conf
+    owner: root
+    group: root
+    mode: 0644
+  tags: [security, limits]
+
+- name: Create login banner
+  template:
+    src: motd.j2
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: 0644
+  tags: [security, banner]
+
+- name: Install security tools
+  package:
+    name:
+      - fail2ban
+      - unattended-upgrades
+      - apt-listchanges
+    state: present
+  when: ansible_os_family == "Debian"
+  tags: [security, packages]
+
+- name: Configure automatic security updates
+  template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: 0644
+  when: ansible_os_family == "Debian"
+  tags: [security, updates]
+
+- name: Configure unattended upgrades
+  template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: 0644
+  when: ansible_os_family == "Debian"
+  tags: [security, updates]
+
+- name: Remove no longer required packages
+  apt:
+    autoremove: yes
+  when: ansible_os_family == "Debian"
+  tags: [security, cleanup]

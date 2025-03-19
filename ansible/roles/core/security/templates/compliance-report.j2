@@ -1,0 +1,110 @@
+# {{ ansible_managed }}
+# SummitEthic Security Compliance Report
+# Generated on: {{ ansible_date_time.date }} {{ ansible_date_time.time }}
+# Server: {{ ansible_hostname }}
+# Security Level: {{ security_level | upper }}
+
+====================================================
+COMPLIANCE SUMMARY
+====================================================
+
+{% if cis_compliance_summary is defined %}
+## CIS Benchmark Compliance
+- Overall Score: {{ cis_compliance_summary.overall_score | round(1) }}%
+- Status: {{ cis_compliance_summary.status | upper }}
+- High Severity Issues: {{ cis_compliance_summary.high_severity_issues }}
+
+  * SSH Security: {{ cis_compliance_summary.ssh_score | round(1) }}%
+  * File Permissions: {{ cis_compliance_summary.file_score | round(1) }}%
+  * Network Security: {{ cis_compliance_summary.network_score | round(1) }}%
+{% endif %}
+
+{% if nist_compliance_summary is defined %}
+## NIST SP 800-53 Compliance
+- Overall Score: {{ nist_compliance_summary.overall_score | round(1) }}%
+- Status: {{ nist_compliance_summary.status | upper }}
+- High Severity Issues: {{ nist_compliance_summary.high_severity_issues }}
+
+  * Authentication Controls: {{ nist_compliance_summary.auth_score | round(1) }}%
+  * Audit Controls: {{ nist_compliance_summary.audit_score | round(1) }}%
+  * Network Security Controls: {{ nist_compliance_summary.network_score | round(1) }}%
+{% endif %}
+
+====================================================
+DETAILED ISSUES
+====================================================
+
+{% if cis_compliance_results is defined %}
+## CIS Issues
+{% for cat in ['high', 'medium', 'low'] %}
+{% set ns = namespace(found=false) %}
+
+{% for check_type, results in cis_compliance_results.items() %}
+{% for issue in results.issues | selectattr('severity', 'equalto', cat) %}
+{% if not ns.found %}
+### {{ cat | upper }} Severity Issues:
+{% set ns.found = true %}
+{% endif %}
+- {{ issue.description }}
+  * Recommendation: {{ issue.recommendation }}
+  * Ethical Impact: {{ issue.ethical_impact }}
+  * Standard: {{ issue.standard }}
+{% endfor %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{% if nist_compliance_results is defined %}
+## NIST Issues
+{% for cat in ['high', 'medium', 'low'] %}
+{% set ns = namespace(found=false) %}
+
+{% for check_type, results in nist_compliance_results.items() %}
+{% for issue in results.issues | selectattr('severity', 'equalto', cat) %}
+{% if not ns.found %}
+### {{ cat | upper }} Severity Issues:
+{% set ns.found = true %}
+{% endif %}
+- {{ issue.description }}
+  * Recommendation: {{ issue.recommendation }}
+  * Ethical Impact: {{ issue.ethical_impact }}
+  * Standard: {{ issue.standard }}
+{% endfor %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+====================================================
+ETHICAL ASSESSMENT
+====================================================
+
+{% if ssh_compliance.ethical_assessment is defined %}
+SSH Configuration:
+- Rating: {{ ssh_compliance.ethical_assessment.rating | upper }}
+- Key Recommendations:
+{% for rec in ssh_compliance.ethical_assessment.recommendations %}
+  * {{ rec }}
+{% endfor %}
+{% endif %}
+
+{% if file_compliance.ethical_assessment is defined %}
+File Permissions:
+- Rating: {{ file_compliance.ethical_assessment.rating | upper }}
+- Key Recommendations:
+{% for rec in file_compliance.ethical_assessment.recommendations %}
+  * {{ rec }}
+{% endfor %}
+{% endif %}
+
+{% if network_compliance.ethical_assessment is defined %}
+Network Security:
+- Rating: {{ network_compliance.ethical_assessment.rating | upper }}
+- Key Recommendations:
+{% for rec in network_compliance.ethical_assessment.recommendations %}
+  * {{ rec }}
+{% endfor %}
+{% endif %}
+
+====================================================
+END OF REPORT
+====================================================

@@ -1,0 +1,41 @@
+[DEFAULT]
+# Ban hosts for 1 hour
+bantime = 3600
+# Check for matches every 10 seconds
+findtime = 600
+# Ban after 5 retries
+maxretry = 5
+# Use UFW to ban
+banaction = ufw
+# Use all available interfaces
+backend = auto
+# Send mail alerts
+mta = mail
+destemail = security@summitethic.com
+sendername = Fail2Ban
+# Format of emails
+action = %(action_mwl)s
+
+# SSH jail
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+
+# SSH Brute Force
+[ssh-brute]
+enabled = true
+port = ssh
+filter = sshd-brute
+logpath = /var/log/auth.log
+maxretry = 6
+findtime = 300
+
+# Authentication failures
+[auth]
+enabled = true
+filter = auth
+logpath = /var/log/auth.log
+maxretry = 5

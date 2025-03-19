@@ -1,0 +1,30 @@
+---
+# Optimize kernel parameters via sysctl
+
+- name: Create sysctl.d directory if not exists
+  file:
+    path: /etc/sysctl.d
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+  tags: [sysctl]
+
+- name: Apply sysctl parameters
+  template:
+    src: 99-sysctl.conf.j2
+    dest: /etc/sysctl.d/99-summitethic.conf
+    mode: 0644
+    owner: root
+    group: root
+  notify: reload_sysctl
+  tags: [sysctl]
+
+- name: Apply sysctl settings immediately
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  with_items: "{{ sysctl_settings }}"
+  tags: [sysctl]

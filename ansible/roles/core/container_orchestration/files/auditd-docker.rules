@@ -1,0 +1,17 @@
+# Docker specific audit rules for SummitEthic
+# Monitor Docker files and directories
+
+-w /usr/bin/dockerd -p rwxa -k docker
+-w /usr/bin/docker -p rwxa -k docker
+-w /usr/bin/containerd -p rwxa -k docker
+-w /usr/bin/containerd-shim -p rwxa -k docker
+-w /usr/bin/containerd-shim-runc-v1 -p rwxa -k docker
+-w /usr/bin/runc -p rwxa -k docker
+-w /var/lib/docker -p rwxa -k docker
+-w /etc/docker -p rwxa -k docker
+-w /etc/containerd -p rwxa -k docker
+-w /etc/default/docker -p rwxa -k docker
+-w /etc/sysconfig/docker -p rwxa -k docker
+-w /etc/docker/daemon.json -p rwxa -k docker
+-w /usr/lib/systemd/system/docker.service -p rwxa -k docker
+-w /usr/lib/systemd/system/docker.socket -p rwxa -k docker

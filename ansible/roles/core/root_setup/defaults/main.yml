@@ -1,0 +1,27 @@
+---
+# Root setup role default variables
+
+# Administrative user
+admin_user: "summitethic"
+admin_group: "summitethic"
+admin_shell: "/bin/bash"
+admin_groups:
+  - sudo
+  - adm
+
+# SSH configuration
+ssh_port: 22
+ssh_permit_root_login: "no"
+ssh_password_authentication: false
+ssh_pubkey_authentication: true
+max_auth_tries: 3
+login_grace_time: "30s"
+
+# System updates
+perform_system_updates: true
+reboot_if_needed: false
+reboot_timeout: 600
+
+# System hostname
+set_hostname: true
+hostname: "{{ inventory_hostname_short }}"

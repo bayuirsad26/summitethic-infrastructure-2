@@ -1,0 +1,67 @@
+# SummitEthic Audit Rules
+# These rules reflect our ethical security policy and focus on key areas
+
+# Delete all existing rules
+-D
+
+# Set buffer size
+-b 8192
+
+# Ensure events don't get lost
+-f 1
+
+# Critical file monitoring
+-w /etc/passwd -p wa -k user-modification
+-w /etc/shadow -p wa -k user-modification
+-w /etc/group -p wa -k user-modification
+-w /etc/gshadow -p wa -k user-modification
+-w /etc/security/opasswd -p wa -k user-modification
+-w /etc/sudoers -p wa -k sudoers
+-w /etc/sudoers.d/ -p wa -k sudoers
+
+# Monitor user authentication attempts
+-w /var/log/auth.log -p wa -k authentication
+-w /var/log/faillog -p wa -k authentication
+-w /var/log/lastlog -p wa -k authentication
+-w /var/log/sudo.log -p wa -k sudo
+
+# Monitor system changes
+-w /etc/hosts -p wa -k network-modifications
+-w /etc/network/ -p wa -k network-modifications
+-w /etc/ssh/sshd_config -p wa -k ssh-configuration
+-w /etc/firewalld/ -p wa -k firewall-modifications
+-w /etc/ufw/ -p wa -k firewall-modifications
+-w /etc/sysctl.conf -p wa -k system-modifications
+-w /etc/crontab -p wa -k cron-modifications
+-w /etc/cron.d/ -p wa -k cron-modifications
+
+# Monitor sensitive directories
+-w /root/ -p wa -k root-activity
+-w /etc/summitethic/ -p wa -k summitethic-config
+-w /var/log/ -p wa -k log-modifications
+
+# Monitor mount operations
+-a always,exit -F arch=b64 -S mount -S umount2 -k mount
+-a always,exit -F arch=b32 -S mount -S umount -S umount2 -k mount
+
+# Monitor admin commands
+-a always,exit -F path=/bin/su -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged-usage
+-a always,exit -F path=/usr/bin/sudo -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged-usage
+-a always,exit -F path=/usr/bin/newgrp -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged-usage
+-a always,exit -F path=/usr/bin/chsh -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged-usage
+-a always,exit -F path=/usr/bin/passwd -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged-usage
+
+# Monitor user/group changes
+-a always,exit -F arch=b64 -S setuid -S setgid -k user-change
+-a always,exit -F arch=b32 -S setuid -S setgid -k user-change
+-a always,exit -F arch=b64 -S setreuid -S setregid -k user-change
+-a always,exit -F arch=b32 -S setreuid -S setregid -k user-change
+-a always,exit -F arch=b64 -S chown -S fchown -S fchownat -S lchown -k chown
+-a always,exit -F arch=b32 -S chown -S fchown -S fchownat -S lchown -k chown
+
+# Monitor system time changes
+-a always,exit -F arch=b64 -S adjtimex -S settimeofday -S clock_settime -k time-change
+-a always,exit -F arch=b32 -S adjtimex -S settimeofday -S clock_settime -k time-change
+
+# Make the configuration immutable - MUST BE LAST RULE
+-e 2

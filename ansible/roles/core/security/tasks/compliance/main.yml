@@ -1,0 +1,35 @@
+---
+# Main compliance checking tasks
+
+- name: Run CIS compliance checks
+  include_tasks: cis.yml
+  when: "'cis' in security_compliance_standards"
+  tags: [compliance, cis]
+
+- name: Run NIST compliance checks
+  include_tasks: nist.yml
+  when: "'nist' in security_compliance_standards"
+  tags: [compliance, nist]
+
+- name: Gather all compliance results
+  set_fact:
+    compliance_results: "{{ compliance_results | default({}) | combine(item) }}"
+  with_items:
+    - "{{ cis_compliance_results | default({}) }}"
+    - "{{ nist_compliance_results | default({}) }}"
+  tags: [compliance]
+
+- name: Generate compliance report
+  template:
+    src: compliance-report.j2
+    dest: /etc/summitethic/security/compliance-report-{{ ansible_date_time.date }}.txt
+    owner: root
+    group: root
+    mode: 0600
+  when: compliance_results is defined
+  tags: [compliance, report]
+
+- name: Send notification about compliance results
+  debug:
+    msg: "Compliance check completed. Report available at /etc/summitethic/security/compliance-report-{{ ansible_date_time.date }}.txt"
+  tags: [compliance, notification]

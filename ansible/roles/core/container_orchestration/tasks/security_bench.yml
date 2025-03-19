@@ -1,0 +1,75 @@
+---
+# Docker security bench tasks
+
+- name: Create Docker bench security directory
+  file:
+    path: /opt/docker-bench-security
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  tags: [security]
+
+- name: Download Docker bench security
+  get_url:
+    url: https://github.com/docker/docker-bench-security/archive/main.zip
+    dest: /tmp/docker-bench-security.zip
+    mode: 0644
+  tags: [security]
+
+- name: Install unzip package
+  package:
+    name: unzip
+    state: present
+  tags: [security]
+
+- name: Extract Docker bench security
+  unarchive:
+    src: /tmp/docker-bench-security.zip
+    dest: /opt/docker-bench-security
+    remote_src: yes
+    extra_opts:
+      - --strip-components=1
+  tags: [security]
+
+- name: Set executable permissions for Docker bench security
+  file:
+    path: /opt/docker-bench-security/docker-bench-security.sh
+    mode: 0755
+  tags: [security]
+
+- name: Schedule Docker security audit
+  cron:
+    name: "Docker security audit"
+    hour: "3"
+    minute: "30"
+    weekday: "0"
+    job: "/opt/docker-bench-security/docker-bench-security.sh > /var/log/docker-security-audit-$(date +\\%Y\\%m\\%d).log 2>&1"
+  tags: [security, cron]
+
+- name: Create Docker security dashboard directory
+  file:
+    path: /etc/summitethic/security/docker
+    state: directory
+    owner: root
+    group: root
+    mode: 0750
+  tags: [security]
+
+- name: Create Docker security results parser
+  template:
+    src: docker-security-parser.sh.j2
+    dest: /usr/local/bin/docker-security-parser
+    owner: root
+    group: root
+    mode: 0755
+  tags: [security]
+
+- name: Schedule results processing
+  cron:
+    name: "Process Docker security results"
+    hour: "4"
+    minute: "30"
+    weekday: "0"
+    job: "/usr/local/bin/docker-security-parser /var/log/docker-security-audit-$(date +\\%Y\\%m\\%d).log > /etc/summitethic/security/docker/assessment-$(date +\\%Y\\%m\\%d).json"
+  tags: [security, cron]

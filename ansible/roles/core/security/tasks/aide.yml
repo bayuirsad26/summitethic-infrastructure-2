@@ -1,0 +1,52 @@
+---
+# Configure AIDE (Advanced Intrusion Detection Environment)
+
+- name: Install AIDE
+  package:
+    name: aide
+    state: present
+  register: aide_install
+  until: aide_install is success
+  retries: 3
+  delay: 5
+  when: aide_enabled | bool
+  tags: [aide]
+
+- name: Configure AIDE
+  template:
+    src: aide.conf.j2
+    dest: /etc/aide/aide.conf
+    owner: root
+    group: root
+    mode: 0600
+  when: aide_enabled | bool
+  tags: [aide]
+
+- name: Initialize AIDE database
+  shell: |
+    aideinit
+    mv /var/lib/aide/aide.db.new {{ aide_db_path }}
+  args:
+    creates: "{{ aide_db_path }}"
+  when: aide_enabled | bool
+  changed_when: false
+  tags: [aide]
+
+- name: Set up AIDE cron job
+  cron:
+    name: "AIDE Integrity Check"
+    hour: "{{ aide_cron_hour }}"
+    minute: "{{ aide_cron_minute }}"
+    job: "aide --check | mail -s 'AIDE Integrity Check - {{ ansible_hostname }}' {{ aide_email }}"
+  when: aide_enabled | bool
+  tags: [aide, cron]
+
+- name: Create AIDE database directory
+  file:
+    path: "{{ aide_db_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0750
+  when: aide_enabled | bool
+  tags: [aide]

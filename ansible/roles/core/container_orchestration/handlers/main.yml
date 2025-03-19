@@ -1,0 +1,43 @@
+---
+# Container orchestration role handlers
+
+- name: restart_docker
+  service:
+    name: docker
+    state: restarted
+    daemon_reload: yes
+  register: docker_restarted
+  retries: 3
+  delay: 10
+  until: docker_restarted is success
+  when: not ansible_check_mode
+
+- name: reload_systemd
+  command: systemctl daemon-reload
+  when: ansible_service_mgr == "systemd"
+
+- name: restart_containerd
+  service:
+    name: containerd
+    state: restarted
+  register: containerd_restarted
+  retries: 3
+  delay: 5
+  until: containerd_restarted is success
+  when: not ansible_check_mode
+
+- name: restart_kubelet
+  service:
+    name: kubelet
+    state: restarted
+    daemon_reload: yes
+  register: kubelet_restarted
+  retries: 3
+  delay: 10
+  until: kubelet_restarted is success
+  when: not ansible_check_mode and (kubernetes_master | bool or kubernetes_worker | bool)
+
+- name: reload_ufw
+  ufw:
+    state: reloaded
+  when: ansible_os_family == "Debian"

@@ -1,0 +1,47 @@
+---
+# Create administrative user
+
+- name: Create admin group
+  group:
+    name: "{{ admin_group }}"
+    state: present
+  tags: [user]
+
+- name: Create admin user
+  user:
+    name: "{{ admin_user }}"
+    group: "{{ admin_group }}"
+    groups: "{{ admin_groups | join(',') }}"
+    shell: "{{ admin_shell }}"
+    comment: "SummitEthic Administrative User"
+    create_home: yes
+    state: present
+  tags: [user]
+
+- name: Set up sudo access for admin user
+  template:
+    src: sudoers.j2
+    dest: "/etc/sudoers.d/{{ admin_user }}"
+    owner: root
+    group: root
+    mode: 0440
+    validate: "visudo -cf %s"
+  tags: [user, sudo]
+
+- name: Create SSH directory for admin user
+  file:
+    path: "/home/{{ admin_user }}/.ssh"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_group }}"
+    mode: 0700
+  tags: [user, ssh]
+
+- name: Set up authorized keys for admin user
+  authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ item }}"
+    state: present
+  with_items: "{{ admin_ssh_keys | default([]) }}"
+  when: admin_ssh_keys is defined and admin_ssh_keys | length > 0
+  tags: [user, ssh]

@@ -1,0 +1,54 @@
+---
+# NIST compliance checks
+
+- name: Verify NIST SP 800-53 authentication controls
+  security_check:
+    target: "/etc/pam.d/common-auth"
+    scan_type: "config"
+    ethical_level: "{{ 'strict' if security_level == 'maximum' else 'standard' }}"
+    compliance_standards:
+      - nist
+  register: auth_compliance
+  tags: [compliance, nist, auth]
+
+- name: Verify NIST SP 800-53 audit controls
+  security_check:
+    target: "/etc/audit/auditd.conf"
+    scan_type: "config"
+    ethical_level: "{{ 'strict' if security_level == 'maximum' else 'standard' }}"
+    compliance_standards:
+      - nist
+  register: audit_compliance
+  tags: [compliance, nist, audit]
+
+- name: Verify NIST SP 800-53 network security controls
+  security_check:
+    target: "{{ ansible_default_ipv4.interface }}"
+    scan_type: "network"
+    ethical_level: "{{ 'strict' if security_level == 'maximum' else 'standard' }}"
+    compliance_standards:
+      - nist
+  register: network_compliance
+  tags: [compliance, nist, network]
+
+- name: Store NIST compliance results
+  set_fact:
+    nist_compliance_results:
+      nist_auth: "{{ auth_compliance }}"
+      nist_audit: "{{ audit_compliance }}"
+      nist_network: "{{ network_compliance }}"
+  tags: [compliance, nist]
+
+- name: Generate NIST compliance summary
+  set_fact:
+    nist_compliance_summary:
+      auth_score: "{{ auth_compliance.score }}"
+      audit_score: "{{ audit_compliance.score }}"
+      network_score: "{{ network_compliance.score }}"
+      overall_score: "{{ (auth_compliance.score + audit_compliance.score + network_compliance.score) / 3 }}"
+      high_severity_issues:
+        "{{ (auth_compliance.issues | selectattr('severity', 'equalto', 'high') | list | length) +
+        (audit_compliance.issues | selectattr('severity', 'equalto', 'high') | list | length) +
+        (network_compliance.issues | selectattr('severity', 'equalto', 'high') | list | length) }}"
+      status: "{{ 'compliant' if ((auth_compliance.score + audit_compliance.score + network_compliance.score) / 3) >= 90 else 'non_compliant' }}"
+  tags: [compliance, nist]

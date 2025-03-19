@@ -1,0 +1,27 @@
+# {{ ansible_managed }}
+# SummitEthic login security configuration
+
+# Password aging controls
+PASS_MAX_DAYS   {{ account_max_password_age }}
+PASS_MIN_DAYS   {{ account_password_min_days }}
+PASS_WARN_AGE   {{ account_password_warn_age }}
+
+# Password length restrictions
+PASS_MIN_LEN    {{ account_min_password_length }}
+
+# Account expiration parameters
+INACTIVE        {{ account_password_inactive_days }}
+
+# Session timeout parameters
+LOGIN_TIMEOUT   60
+
+# Security settings
+FAILLOG_ENAB    yes
+LOG_UNKFAIL_ENAB yes
+LOG_OK_LOGINS   yes
+SYSLOG_SU_ENAB  yes
+SYSLOG_SG_ENAB  yes
+ENCRYPT_METHOD  SHA512
+SHA_CRYPT_MIN_ROUNDS  5000
+SHA_CRYPT_MAX_ROUNDS  10000
+UMASK           {{ max_security_settings.umask_default }}

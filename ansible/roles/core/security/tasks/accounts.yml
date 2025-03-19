@@ -1,0 +1,82 @@
+---
+# Configure account security policies
+
+- name: Set default umask
+  lineinfile:
+    path: "{{ item }}"
+    regexp: "^umask"
+    line: "umask {{ max_security_settings.umask_default if security_level == 'maximum' else '022' }}"
+    state: present
+  with_items:
+    - /etc/profile
+    - /etc/login.defs
+    - /etc/bash.bashrc
+  tags: [accounts, umask]
+
+- name: Configure password aging controls
+  lineinfile:
+    path: /etc/login.defs
+    regexp: "^{{ item.option }}"
+    line: "{{ item.option }} {{ item.value }}"
+    state: present
+  with_items:
+    - { option: "PASS_MAX_DAYS", value: "{{ account_max_password_age }}" }
+    - { option: "PASS_MIN_DAYS", value: "{{ account_password_min_days }}" }
+    - { option: "PASS_WARN_AGE", value: "{{ account_password_warn_age }}" }
+  tags: [accounts, password]
+
+- name: Create nologin message
+  copy:
+    content: "This account is not available.\n"
+    dest: /etc/nologin.txt
+    owner: root
+    group: root
+    mode: 0644
+  tags: [accounts]
+
+- name: Check for accounts with empty passwords
+  shell: 'awk -F: ''($2 == "" ) { print $1 }'' /etc/shadow'
+  register: empty_password_accounts
+  changed_when: false
+  args:
+    warn: false
+  tags: [accounts, audit]
+
+- name: Disable accounts with empty passwords
+  user:
+    name: "{{ item }}"
+    password_lock: yes
+    comment: "SECURITY - Account automatically locked by SummitEthic security policy"
+  with_items: "{{ empty_password_accounts.stdout_lines }}"
+  when: empty_password_accounts.stdout_lines | length > 0
+  tags: [accounts, security]
+
+- name: Find system accounts with login shells
+  shell: 'awk -F: ''($3 < 1000) && ($7 != "/sbin/nologin" && $7 != "/bin/false") { print $1 }'' /etc/passwd'
+  register: system_accounts_with_shells
+  changed_when: false
+  args:
+    warn: false
+  tags: [accounts, audit]
+
+- name: Set appropriate shells for system accounts
+  user:
+    name: "{{ item }}"
+    shell: /sbin/nologin
+  with_items: "{{ system_accounts_with_shells.stdout_lines }}"
+  when:
+    - system_accounts_with_shells.stdout_lines | length > 0
+    - item != "root"
+  tags: [accounts, shells]
+
+- name: Configure account lockout policy
+  template:
+    src: common-auth.j2
+    dest: /etc/pam.d/common-auth
+    owner: root
+    group: root
+    mode: 0644
+  when:
+    - security_level != 'low'
+    - ansible_os_family == 'Debian'
+  tags: [accounts, lockout]

@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+# SummitEthic Docker log rotation configuration
+
+/var/lib/docker/containers/*/*.log {
+    rotate 7
+    daily
+    compress
+    size {{ docker_log_max_size }}
+    missingok
+    delaycompress
+    copytruncate
+    nocreate
+    notifempty
+}
+
+/var/log/docker/*.log {
+    rotate 7
+    daily
+    compress
+    size {{ docker_log_max_size }}
+    missingok
+    create 0644 root root
+    delaycompress
+    notifempty
+}

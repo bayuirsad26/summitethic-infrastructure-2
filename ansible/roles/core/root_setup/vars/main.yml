@@ -1,0 +1,29 @@
+---
+# Root setup role standard variables
+
+# Required packages for bootstrap
+bootstrap_packages:
+  - sudo
+  - ca-certificates
+  - apt-transport-https
+  - gnupg
+  - python3
+  - python3-apt
+  - openssh-server
+  - curl
+  - acl
+
+# Directories to create
+system_directories:
+  - path: /etc/summitethic
+    owner: root
+    group: root
+    mode: "0755"
+  - path: /etc/summitethic/security
+    owner: root
+    group: root
+    mode: "0750"
+  - path: /etc/summitethic/scripts
+    owner: root
+    group: root
+    mode: "0750"

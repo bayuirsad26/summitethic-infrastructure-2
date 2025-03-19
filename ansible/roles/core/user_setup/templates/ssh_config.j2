@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+# SummitEthic SSH client configuration
+
+# Global options
+Host *
+    Protocol 2
+    ForwardAgent no
+    ForwardX11 no
+    HashKnownHosts yes
+    IdentitiesOnly yes
+    StrictHostKeyChecking ask
+    VerifyHostKeyDNS yes
+    Compression yes
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    ControlMaster auto
+    ControlPath ~/.ssh/control-%r@%h:%p
+    ControlPersist 5m
+    AddKeysToAgent yes
+
+# Internal SummitEthic hosts
+Host *.summitethic.com
+    User {{ ansible_user }}
+    IdentityFile ~/.ssh/id_{{ ssh_key_type }}
+    Port {{ ssh_port }}
+
+# Default identity file
+Host *
+    IdentityFile ~/.ssh/id_{{ ssh_key_type }}

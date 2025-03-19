@@ -1,0 +1,28 @@
+---
+# Container orchestration main tasks
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution | lower }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags: [always]
+
+- name: Install Docker
+  include_tasks: docker.yml
+  tags: [docker]
+
+- name: Configure container logging
+  include_tasks: logging.yml
+  tags: [logging]
+
+- name: Configure container orchestration
+  include_tasks: "{{ orchestration_type }}.yml"
+  when: orchestration_type in ['swarm', 'kubernetes']
+  tags: [orchestration]
+
+- name: Run Docker security bench
+  include_tasks: security_bench.yml
+  when: docker_security_bench | bool
+  tags: [security]

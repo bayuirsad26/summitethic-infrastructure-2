@@ -1,0 +1,47 @@
+---
+# Security role standard variables
+
+# Security packages to install for different security levels
+security_packages:
+  low:
+    - ufw
+    - fail2ban
+  medium:
+    - ufw
+    - fail2ban
+    - libpam-pwquality
+    - auditd
+  high:
+    - ufw
+    - fail2ban
+    - libpam-pwquality
+    - auditd
+    - aide
+    - rkhunter
+    - apparmor
+    - apparmor-utils
+  maximum:
+    - ufw
+    - fail2ban
+    - libpam-pwquality
+    - auditd
+    - aide
+    - rkhunter
+    - clamav
+    - clamav-daemon
+    - apparmor
+    - apparmor-utils
+    - policycoreutils
+    - selinux-basics
+
+# Maximum security level parameters
+max_security_settings:
+  aide_cron_hour: 3
+  aide_cron_minute: 30
+  aide_email: "security@summitethic.com"
+  auditd_buffer_size: 16384
+  umask_default: "027"
+  install_maldet: true
+
+# Set to true to install malware scanning tools
+install_maldet: "{{ security_level == 'maximum' }}"

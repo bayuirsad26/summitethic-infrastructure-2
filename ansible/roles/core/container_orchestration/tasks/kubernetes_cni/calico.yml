@@ -1,0 +1,23 @@
+---
+# Deploy Calico CNI
+
+- name: Download Calico YAML
+  get_url:
+    url: https://docs.projectcalico.org/manifests/calico.yaml
+    dest: /tmp/calico.yaml
+    mode: 0644
+  tags: [kubernetes, cni]
+
+- name: Update pod CIDR in Calico config
+  replace:
+    path: /tmp/calico.yaml
+    regexp: '# - name: CALICO_IPV4POOL_CIDR\n\s+# value: "192.168.0.0/16"'
+    replace: '- name: CALICO_IPV4POOL_CIDR\n            value: "{{ kubernetes_pod_network_cidr }}"'
+  tags: [kubernetes, cni]
+
+- name: Apply Calico networking
+  k8s:
+    state: present
+    src: /tmp/calico.yaml
+    kubeconfig: /etc/kubernetes/admin.conf
+  tags: [kubernetes, cni]

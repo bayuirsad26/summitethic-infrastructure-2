@@ -1,0 +1,167 @@
+---
+# Kubernetes configuration
+
+- name: Set up Kubernetes repository
+  apt_repository:
+    repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+    filename: kubernetes
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+  tags: [kubernetes]
+
+- name: Add Kubernetes GPG key
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+  when: ansible_os_family == "Debian"
+  tags: [kubernetes]
+
+- name: Install Kubernetes packages
+  package:
+    name: "{{ kubernetes_packages }}"
+    state: present
+  register: kubernetes_install
+  until: kubernetes_install is success
+  retries: 3
+  delay: 5
+  tags: [kubernetes]
+
+- name: Configure kernel modules for Kubernetes
+  modprobe:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - br_netfilter
+    - overlay
+  tags: [kubernetes]
+
+- name: Configure sysctl parameters for Kubernetes
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  with_items:
+    - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+    - { name: "net.ipv4.ip_forward", value: "1" }
+  tags: [kubernetes]
+
+- name: Disable swap for Kubernetes
+  command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+  tags: [kubernetes]
+
+- name: Remove swap from fstab
+  lineinfile:
+    path: /etc/fstab
+    regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
+    line: '# \1 # Commented out by Ansible for Kubernetes'
+    backrefs: yes
+  tags: [kubernetes]
+
+- name: Initialize Kubernetes cluster
+  command: >
+    kubeadm init
+    --pod-network-cidr={{ kubernetes_pod_network_cidr }}
+    --apiserver-advertise-address={{ kubernetes_apiserver_advertise_address }}
+  when:
+    - kubernetes_init | bool
+    - kubernetes_master | bool
+  register: kubeadm_init
+  args:
+    creates: /etc/kubernetes/admin.conf
+  tags: [kubernetes]
+
+- name: Create .kube directory for user
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - {
+        path: "/home/{{ ansible_user }}/.kube",
+        owner: "{{ ansible_user }}",
+        group: "{{ ansible_user }}",
+        mode: "0755",
+      }
+    - { path: "/root/.kube", owner: "root", group: "root", mode: "0755" }
+  when: kubernetes_master | bool and kubeadm_init.changed
+  tags: [kubernetes]
+
+- name: Copy admin.conf for user
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ item.path }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+    remote_src: yes
+  with_items:
+    - {
+        path: "/home/{{ ansible_user }}/.kube/config",
+        owner: "{{ ansible_user }}",
+        group: "{{ ansible_user }}",
+        mode: "0600",
+      }
+    - { path: "/root/.kube/config", owner: "root", group: "root", mode: "0600" }
+  when: kubernetes_master | bool and kubeadm_init.changed
+  tags: [kubernetes]
+
+- name: Get Kubernetes join command
+  command: kubeadm token create --print-join-command
+  register: kubernetes_join_command
+  changed_when: false
+  when: kubernetes_master | bool and kubernetes_init | bool
+  tags: [kubernetes]
+
+- name: Deploy Kubernetes CNI
+  include_tasks: "kubernetes_cni/{{ kubernetes_cni }}.yml"
+  when: kubernetes_master | bool and kubeadm_init.changed
+  tags: [kubernetes, cni]
+
+- name: Join Kubernetes cluster as worker node
+  command: "{{ hostvars[groups['kubernetes_masters'][0]]['kubernetes_join_command']['stdout'] }}"
+  args:
+    creates: /etc/kubernetes/kubelet.conf
+  when:
+    - kubernetes_worker | bool
+    - groups['kubernetes_masters'] is defined
+    - groups['kubernetes_masters'] | length > 0
+    - not kubernetes_master | bool
+  tags: [kubernetes]
+
+- name: Configure Kubernetes firewall rules
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  with_items:
+    - 6443 # Kubernetes API server
+    - 2379 # etcd client API
+    - 2380 # etcd server API
+    - 10250 # Kubelet API
+    - 10251 # kube-scheduler
+    - 10252 # kube-controller-manager
+  when:
+    - ansible_os_family == "Debian"
+    - kubernetes_master | bool
+  notify: reload_ufw
+  tags: [kubernetes, firewall]
+
+- name: Configure worker node firewall rules
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  with_items:
+    - 10250 # Kubelet API
+    - 30000:32767 # NodePort Services
+  when:
+    - ansible_os_family == "Debian"
+    - kubernetes_worker | bool
+  notify: reload_ufw
+  tags: [kubernetes, firewall]

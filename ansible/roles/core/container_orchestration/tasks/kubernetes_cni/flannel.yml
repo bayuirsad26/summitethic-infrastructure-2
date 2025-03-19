@@ -1,0 +1,23 @@
+---
+# Deploy Flannel CNI
+
+- name: Download Flannel YAML
+  get_url:
+    url: https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+    dest: /tmp/kube-flannel.yml
+    mode: 0644
+  tags: [kubernetes, cni]
+
+- name: Update pod CIDR in Flannel config
+  replace:
+    path: /tmp/kube-flannel.yml
+    regexp: '"Network": "[^"]*"'
+    replace: '"Network": "{{ kubernetes_pod_network_cidr }}"'
+  tags: [kubernetes, cni]
+
+- name: Apply Flannel networking
+  k8s:
+    state: present
+    src: /tmp/kube-flannel.yml
+    kubeconfig: /etc/kubernetes/admin.conf
+  tags: [kubernetes, cni]

@@ -1,0 +1,56 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# SummitEthic Docker logs exploration script
+
+set -e
+
+CONTAINER_NAME=$1
+LINES=${2:-100}
+
+usage() {
+    echo "Usage: $0 <container_name_or_id> [number_of_lines]"
+    echo
+    echo "Examples:"
+    echo "  $0 nginx-proxy                # Show latest 100 lines from nginx-proxy container"
+    echo "  $0 nginx-proxy 500            # Show latest 500 lines from nginx-proxy container"
+    echo "  $0 --list                     # List all containers with their log paths"
+    echo "  $0 --json nginx-proxy | jq    # Output logs in JSON format and pipe to jq"
+    exit 1
+}
+
+list_containers() {
+    echo "Container ID | Container Name | Log Path"
+    echo "-------------|----------------|----------"
+    for container in $(docker ps -q); do
+        name=$(docker inspect --format '{{.Name}}' $container | sed 's/^\///')
+        log_path=$(docker inspect --format '{{.LogPath}}' $container)
+        echo "$container | $name | $log_path"
+    done
+}
+
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    usage
+fi
+
+if [ "$1" == "--list" ]; then
+    list_containers
+    exit 0
+fi
+
+if [ -z "$CONTAINER_NAME" ]; then
+    usage
+fi
+
+if [ "$1" == "--json" ]; then
+    CONTAINER_NAME=$2
+    docker logs --tail=${3:-100} --details $CONTAINER_NAME
+    exit $?
+fi
+
+# Get container logs with timestamp
+docker logs --timestamps --tail=$LINES $CONTAINER_NAME
+
+# Print log file location for reference
+echo
+echo "Log file location: $(docker inspect --format='{{.LogPath}}' $CONTAINER_NAME)"
+echo "Container started: $(docker inspect --format='{{.State.StartedAt}}' $CONTAINER_NAME)"

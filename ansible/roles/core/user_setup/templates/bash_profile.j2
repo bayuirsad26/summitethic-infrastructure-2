@@ -1,0 +1,50 @@
+# {{ ansible_managed }}
+# SummitEthic User Configuration
+
+# Load the default .profile
+if [ -f ~/.profile ]; then
+    . ~/.profile
+fi
+
+# Load .bashrc if it exists
+if [ -f ~/.bashrc ]; then
+    . ~/.bashrc
+fi
+
+# Set PATH
+export PATH=$HOME/bin:/usr/local/bin:$PATH
+
+# Set default editor
+export EDITOR=vim
+
+# Command history settings
+export HISTSIZE=10000
+export HISTFILESIZE=20000
+export HISTCONTROL=ignoreboth:erasedups
+export HISTIGNORE="ls:cd:exit:clear:history"
+
+# Timestamp history entries
+export HISTTIMEFORMAT='%F %T '
+
+# Append to history, don't overwrite
+shopt -s histappend
+
+# Color prompt
+export PS1="\[\033[38;5;45m\]\u\[\033[0m\]@\[\033[38;5;33m\]\h\[\033[0m\]:\[\033[38;5;214m\]\w\[\033[0m\]\\$ "
+
+# Aliases
+alias ll='ls -lahF'
+alias la='ls -A'
+alias l='ls -CF'
+alias h='history'
+alias ..='cd ..'
+alias ...='cd ../..'
+alias grep='grep --color=auto'
+alias df='df -h'
+alias du='du -h'
+alias vi='vim'
+
+# Welcome message
+echo "Welcome to SummitEthic Infrastructure - {{ ansible_hostname }}"
+echo "Remember our ethical principles in all operations."
+echo "For support: support@summitethic.com"

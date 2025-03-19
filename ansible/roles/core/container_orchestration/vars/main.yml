@@ -1,0 +1,46 @@
+---
+# Container orchestration standard variables
+
+# Docker packages
+docker_packages:
+  - docker-ce={{ docker_version }}*
+  - docker-ce-cli={{ docker_version }}*
+  - containerd.io
+
+# Kubernetes packages
+kubernetes_packages:
+  - kubelet
+  - kubeadm
+  - kubectl
+
+# Container directories
+container_directories:
+  - path: /etc/docker
+    owner: root
+    group: root
+    mode: "0755"
+  - path: /etc/docker/certs.d
+    owner: root
+    group: root
+    mode: "0755"
+  - path: /etc/systemd/system/docker.service.d
+    owner: root
+    group: root
+    mode: "0755"
+  - path: /var/lib/docker
+    owner: root
+    group: root
+    mode: "0711"
+
+# Security files
+docker_security_files:
+  - src: seccomp-profile.json
+    dest: /etc/docker/seccomp-profile.json
+    owner: root
+    group: root
+    mode: "0644"
+  - src: auditd-docker.rules
+    dest: /etc/audit/rules.d/10-docker.rules
+    owner: root
+    group: root
+    mode: "0640"
